@@ -12,17 +12,21 @@
   outputs =
     { nixpkgs, home-manager, ... }:
     let
-      system = "aarch64-linux"; # Raspberry Pi 5
+      system = "aarch64-linux";
+      pkgs = import nixpkgs { inherit system; };
+
+      obsitui = pkgs.callPackage ./pkgs/obsitui.nix { };
+      nixvim-editor = pkgs.callPackage ./pkgs/nixvim-editor.nix { };
     in
     {
+      packages.${system} = {
+        inherit obsitui nixvim-editor;
+      };
+
       homeConfigurations.ryuzaki = home-manager.lib.homeManagerConfiguration {
-        pkgs = import nixpkgs { inherit system; };
-
-        modules = [
-          ./home.nix
-        ];
-
-        extraSpecialArgs = { inherit system; };
+        inherit pkgs;
+        modules = [ ./home.nix ];
+        extraSpecialArgs = { inherit obsitui nixvim-editor; };
       };
     };
 }
