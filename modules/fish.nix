@@ -1,4 +1,5 @@
-{ ... }: {
+{ ... }:
+{
 
   programs.fish = {
     enable = true;
@@ -15,10 +16,11 @@
     '';
 
     shellAliases = {
-      nixvim               = "nix run github:Ryuzaki5100/nixvim --refresh";
+      nixvim = "nix run github:Ryuzaki5100/nixvim --refresh";
       rebuild-home-manager = "home-manager switch --flake ~/dotfiles#ryuzaki";
-      update-home-manager  = "cd ~/dotfiles && nix flake update && cd -";
-      display              = "chafa -f kitty --fit-width";
+      update-home-manager = "cd ~/dotfiles && nix flake update && cd -";
+      display = "chafa -f kitty --fit-width";
+      clock = "clock-rs -c bright-black -B -b";
     };
   };
 }

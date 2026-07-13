@@ -113,6 +113,7 @@ Configures Fish as the login shell.
 | `rebuild-home-manager` | `home-manager switch --flake ~/dotfiles#ryuzaki` |
 | `update-home-manager` | `cd ~/dotfiles && nix flake update && cd -` |
 | `display` | `chafa -f kitty --fit-width` |
+| `clock` | `clock-rs -c bright-black -B -b` |
 
 ### packages.nix
 
@@ -209,6 +210,7 @@ Both commands are aliased as `rebuild-home-manager` and `update-home-manager` fo
 | `update-home-manager` | Update flake lockfile and apply |
 | `nixvim` | Launch the Nixvim editor |
 | `display <image>` | Render an image in the terminal via kitty protocol |
+| `clock` | Display a digital clock in the terminal |
 | `home-manager expire-generations 30d` | Garbage collect old Home Manager generations |
 
 ## Acknowledgements
