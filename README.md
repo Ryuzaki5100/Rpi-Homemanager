@@ -124,9 +124,22 @@ Declarative package list installed via `home.packages`. Grouped by category:
 | Dev tools | `lazygit`, `tmux` |
 | System info | `fastfetch`, `nitch`, `btop`, `clock-rs` |
 | Media & graphics | `chafa`, `timg`, `mpv`, `ffmpeg`, `yt-dlp`, `yazi` |
-| Networking & chat | `browsh`, `nchat`, `bluetuith`, `reddit-tui`, `smassh`, `gemini-cli` |
+| Networking & chat | `browsh`, `nchat`, `bluetuith`, `wifitui`, `reddit-tui`, `smassh`, `gemini-cli` |
 | Obsidian TUIs | `basalt`, `obsitui`, `nixvim-editor` |
 | Fun | `cmatrix` |
+
+> **Note:** `wifitui` requires your user to be in the `netdev` group and a polkit rule allowing NetworkManager actions. On Debian systems, run:
+>
+> ```bash
+> sudo usermod -aG netdev $USER
+> echo 'polkit.addRule(function(a, s) {
+>   if (a.id.indexOf("org.freedesktop.NetworkManager.") == 0 && s.active && s.isInGroup("netdev"))
+>     return polkit.Result.YES;
+> })' | sudo tee /etc/polkit-1/rules.d/10-networkmanager-wifi.rules
+> sudo systemctl restart polkit
+> ```
+>
+> Then log out and back in for the group change to take effect.
 
 ### obsidian.nix
 

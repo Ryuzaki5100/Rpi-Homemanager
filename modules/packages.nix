@@ -16,7 +16,7 @@ let inherit (pkgs) lib; in {
     chafa timg mpv ffmpeg yt-dlp yazi
 
     # Networking & chat
-    browsh nchat bluetuith reddit-tui smassh gemini-cli
+    browsh nchat bluetuith wifitui reddit-tui smassh gemini-cli
 
     # Obsidian TUIs
     basalt obsitui nixvim-editor
