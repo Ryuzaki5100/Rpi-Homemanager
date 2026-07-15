@@ -17,14 +17,24 @@
 
       obsitui = pkgs.callPackage ./pkgs/obsitui.nix { };
       nixvim-editor = pkgs.callPackage ./pkgs/nixvim-editor.nix { };
+      srl-tui = pkgs.callPackage ./pkgs/srl-tui.nix { };
+
+      pkgs' = import nixpkgs {
+        inherit system;
+        overlays = [
+          (final: prev: {
+            srl-tui = prev.callPackage ./pkgs/srl-tui.nix { };
+          })
+        ];
+      };
     in
     {
       packages.${system} = {
-        inherit obsitui nixvim-editor;
+        inherit obsitui nixvim-editor srl-tui;
       };
 
       homeConfigurations.ryuzaki = home-manager.lib.homeManagerConfiguration {
-        inherit pkgs;
+        pkgs = pkgs';
         modules = [ ./home.nix ];
         extraSpecialArgs = { inherit obsitui nixvim-editor; };
       };

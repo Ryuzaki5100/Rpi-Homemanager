@@ -31,13 +31,14 @@ flake.nix  ──►  home.nix  ──►  modules/*.nix
                       │
                       └── pkgs/
                             ├── nixvim-editor.nix
-                            └── obsitui.nix
+                            ├── obsitui.nix
+                            └── srl-tui.nix
 ```
 
 | Layer | Description |
 |---|---|
-| **`flake.nix`** | Entry point. Pins `nixpkgs` (nixos-unstable) and `home-manager`. Builds custom packages and passes them as `extraSpecialArgs` into the module tree. |
-| **`home.nix`** | Thin shim; imports all five modules under `modules/`. Receives `obsitui` and `nixvim-editor` as extra arguments. |
+| **`flake.nix`** | Entry point. Pins `nixpkgs` (nixos-unstable) and `home-manager`. Builds custom packages; passes `obsitui` and `nixvim-editor` as `extraSpecialArgs` and injects `srl-tui` via overlay so it's available as a first-class `pkgs` attribute. |
+| **`home.nix`** | Thin shim; imports all five modules under `modules/`. Receives `obsitui`, `nixvim-editor`, and `srl-tui` as extra arguments. |
 | **`modules/`** | Self-contained Nix files, each responsible for one concern. |
 | **`pkgs/`** | Custom package derivations exported both as flake outputs and installed in the Home Manager profile. |
 
@@ -50,11 +51,12 @@ flake.nix  ──►  home.nix  ──►  modules/*.nix
 
 ### Custom Packages as Flake Outputs
 
-Both `obsitui` and `nixvim-editor` are exposed under `packages.aarch64-linux`, making them usable from outside this flake:
+All custom packages are exposed under `packages.aarch64-linux`, making them usable from outside this flake:
 
 ```bash
 nix run github:Ryuzaki5100/dotfiles#obsitui
 nix run github:Ryuzaki5100/dotfiles#nixvim-editor
+nix run github:Ryuzaki5100/dotfiles#srl-tui
 ```
 
 ## Structure
@@ -72,7 +74,8 @@ dotfiles/
 │   └── obsidian.nix       # Obsidian vaults & Basalt config
 └── pkgs/
     ├── nixvim-editor.nix  # Thin wrapper around external Nixvim flake
-    └── obsitui.nix        # Obsidian TUI from source (npm)
+    ├── obsitui.nix        # Obsidian TUI from source (npm)
+    └── srl-tui.nix        # Spaced repetition flashcard TUI (Rust)
 ```
 
 ## Modules
@@ -113,7 +116,6 @@ Configures Fish as the login shell.
 | `rebuild-home-manager` | `home-manager switch --flake ~/dotfiles#ryuzaki` |
 | `update-home-manager` | `cd ~/dotfiles && nix flake update && cd -` |
 | `display` | `chafa -f kitty --fit-width` |
-| `clock` | `clock-rs -c bright-black -B -b` |
 
 ### packages.nix
 
@@ -127,6 +129,7 @@ Declarative package list installed via `home.packages`. Grouped by category:
 | Media & graphics | `chafa`, `timg`, `mpv`, `ffmpeg`, `yt-dlp`, `yazi` |
 | Networking & chat | `browsh`, `nchat`, `bluetuith`, `wifitui`, `reddit-tui`, `smassh`, `gemini-cli` |
 | Obsidian TUIs | `basalt`, `obsitui`, `nixvim-editor` |
+| Flashcards | `srl-tui` |
 | Fun | `cmatrix` |
 
 > **Note:** `wifitui` requires your user to be in the `netdev` group and a polkit rule allowing NetworkManager actions. On Debian systems, run:
@@ -155,6 +158,8 @@ Sets up the Obsidian vault ecosystem for terminal-based note-taking.
     - **Ctrl+E** — open current note in Nixvim
     - **Ctrl+Alt+E** — spawn Nixvim in a new terminal window for the current note
 
+> **Note:** `srl-tui` is injected into `pkgs` via a Nixpkgs overlay in `flake.nix` so it can be referenced naturally alongside other packages. `obsitui` and `nixvim-editor` are passed as `extraSpecialArgs` instead.
+
 ## Custom Packages
 
 ### nixvim-editor
@@ -175,6 +180,17 @@ Builds [obsitui](https://github.com/atr0t0s/obsitui) — a terminal UI for brows
 |---|---|
 | Source | `github:atr0t0s/obsitui` (main) |
 | Build | `buildNpmPackage` |
+| License | MIT |
+
+### srl-tui
+
+Builds [srl-tui](https://github.com/kearnsw/srl-tui) — a spaced repetition flashcard TUI — from source using `rustPlatform.buildRustPackage`. Uses the SM-2 algorithm for optimal review scheduling, supports Anki `.apkg` import/export, and stores decks as plain text files.
+
+| Attribute | Value |
+|---|---|
+| Source | `github:kearnsw/srl-tui` (v0.8.7) |
+| Build | `rustPlatform.buildRustPackage` |
+| Algorithm | SM-2 (SuperMemo 2) |
 | License | MIT |
 
 ## Quick Start
@@ -210,7 +226,7 @@ Both commands are aliased as `rebuild-home-manager` and `update-home-manager` fo
 | `update-home-manager` | Update flake lockfile and apply |
 | `nixvim` | Launch the Nixvim editor |
 | `display <image>` | Render an image in the terminal via kitty protocol |
-| `clock` | Display a digital clock in the terminal |
+| `srl` | Launch the spaced repetition flashcard TUI |
 | `home-manager expire-generations 30d` | Garbage collect old Home Manager generations |
 
 ## Acknowledgements
