@@ -37,7 +37,7 @@ flake.nix  ──►  home.nix  ──►  modules/*.nix
 | Layer | Description |
 |---|---|
 | **`flake.nix`** | Entry point. Pins `nixpkgs` (nixos-unstable) and `home-manager`. Builds custom packages and passes them as `extraSpecialArgs` into the module tree. |
-| **`home.nix`** | Thin shim; imports all five modules under `modules/`. Receives `obsitui` and `nixvim-editor` as extra arguments. |
+| **`home.nix`** | Thin shim; imports all five modules under `modules/`. Receives `obsitui` and `nixvim-editor` as extra arguments. Also declares `xdg.configFile` entries (e.g., `mangal/mangal.toml`) and allows insecure packages via `nixpkgs.config.permittedInsecurePackages`. |
 | **`modules/`** | Self-contained Nix files, each responsible for one concern. |
 | **`pkgs/`** | Custom package derivations exported both as flake outputs and installed in the Home Manager profile. |
 
@@ -110,11 +110,9 @@ Configures Fish as the login shell.
 | Alias | Command |
 |---|---|
 | `nixvim` | `nix run github:Ryuzaki5100/nixvim --refresh` |
-| `rebuild-home-manager` | `home-manager switch --flake ~/dotfiles#ryuzaki && exec fish` |
+| `rebuild-home-manager` | `home-manager switch --flake ~/dotfiles#ryuzaki` |
 | `update-home-manager` | `cd ~/dotfiles && nix flake update && cd -` |
-| `search` | `nix search nixpkgs` |
 | `display` | `chafa -f kitty --fit-width` |
-| `clock` | `clock-rs -c bright-black -B -b` |
 
 ### packages.nix
 
@@ -125,8 +123,8 @@ Declarative package list installed via `home.packages`. Grouped by category:
 | Editors | `neovim`, `code-server`, `opencode` |
 | Dev tools | `lazygit`, `tmux` |
 | System info | `fastfetch`, `nitch`, `btop`, `clock-rs` |
-| Media & graphics | `chafa`, `timg`, `mpv`, `ffmpeg`, `yt-dlp`, `yazi` |
-| Networking & chat | `browsh`, `nchat`, `bluetuith`, `wifitui`, `reddit-tui`, `reddix`, `smassh`, `gemini-cli` |
+| Media & graphics | `chafa`, `timg`, `mpv`, `ffmpeg`, `yt-dlp`, `yazi`, `pandoc` |
+| Networking & chat | `browsh`, `nchat`, `bluetuith`, `wifitui`, `reddit-tui`, `smassh`, `gemini-cli`, `discordo`, `wiki-tui`, `hackernews-tui`, `youtube-tui`, `mangal` |
 | Obsidian TUIs | `basalt`, `obsitui`, `nixvim-editor` |
 | Fun | `cmatrix` |
 
@@ -211,8 +209,6 @@ Both commands are aliased as `rebuild-home-manager` and `update-home-manager` fo
 | `update-home-manager` | Update flake lockfile and apply |
 | `nixvim` | Launch the Nixvim editor |
 | `display <image>` | Render an image in the terminal via kitty protocol |
-| `search` | Search for packages in nixpkgs |
-| `clock` | Show a live clock in the terminal |
 | `home-manager expire-generations 30d` | Garbage collect old Home Manager generations |
 
 ## Acknowledgements

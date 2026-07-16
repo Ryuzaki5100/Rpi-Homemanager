@@ -33,6 +33,7 @@ in
     ffmpeg
     yt-dlp
     yazi
+    pandoc
 
     # Networking & chat
     browsh
@@ -41,8 +42,13 @@ in
     wifitui
     reddit-tui
     reddix
+    discordo
+    wiki-tui
+    hackernews-tui
+    youtube-tui
     smassh
     gemini-cli
+    mangal
 
     # Obsidian TUIs
     basalt
@@ -54,5 +60,8 @@ in
 
     # Fun
     cmatrix
+
+    # Automation tools
+    # openclaw
   ];
 }
