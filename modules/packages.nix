@@ -40,6 +40,7 @@ in
     bluetuith
     wifitui
     reddit-tui
+    reddix
     smassh
     gemini-cli
 
