@@ -108,7 +108,7 @@ Configures Fish as the login shell.
 **Aliases:**
 
 | Alias | Command |
-|---|---|---|
+|---|---|
 | `nixvim` | `nix run github:Ryuzaki5100/nixvim --refresh` |
 | `rebuild-home-manager` | `home-manager switch --flake ~/dotfiles#ryuzaki && exec fish` |
 | `update-home-manager` | `cd ~/dotfiles && nix flake update && cd -` |
