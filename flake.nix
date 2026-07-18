@@ -10,7 +10,11 @@
   };
 
   outputs =
-    { nixpkgs, home-manager, ... }:
+    {
+      nixpkgs,
+      home-manager,
+      ...
+    }:
     let
       system = "aarch64-linux";
       pkgs = import nixpkgs { inherit system; };
@@ -35,7 +39,9 @@
 
       homeConfigurations.ryuzaki = home-manager.lib.homeManagerConfiguration {
         pkgs = pkgs';
-        modules = [ ./home.nix ];
+        modules = [
+          ./home.nix
+        ];
         extraSpecialArgs = { inherit obsitui nixvim-editor; };
       };
     };

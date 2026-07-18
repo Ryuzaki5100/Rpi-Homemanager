@@ -1,4 +1,9 @@
-{ obsitui, nixvim-editor, ... }: {
+{
+  obsitui,
+  nixvim-editor,
+  ...
+}:
+{
 
   imports = [
     ./modules/core.nix
@@ -6,11 +11,15 @@
     ./modules/fish.nix
     ./modules/packages.nix
     ./modules/obsidian.nix
+    ./modules/gmail-mcp.nix
   ];
 
-  nixpkgs.config.permittedInsecurePackages = [
-    "openclaw-2026.6.11"
-  ];
+  nixpkgs.config = {
+    allowUnfree = true;
+    permittedInsecurePackages = [
+      "openclaw-2026.6.11"
+    ];
+  };
 
   xdg.configFile."mangal/mangal.toml".text = ''
     [downloader]
@@ -24,4 +33,6 @@
     language = "en"
     nsfw = false
   '';
+
+
 }

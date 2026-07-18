@@ -34,6 +34,8 @@ in
     yt-dlp
     yazi
     pandoc
+    localsend
+    jocalsend
 
     # Networking & chat
     browsh
@@ -49,6 +51,8 @@ in
     smassh
     gemini-cli
     mangal
+    # ani-cli
+    # nyaa
 
     # Obsidian TUIs
     basalt

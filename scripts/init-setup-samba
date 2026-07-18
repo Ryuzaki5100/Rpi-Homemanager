@@ -1,0 +1,102 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SMB_CONF="/etc/samba/smb.conf"
+
+echo "=== Samba Setup ==="
+
+if ! dpkg -l samba 2>/dev/null | grep -q '^ii'; then
+    echo "Installing Samba via apt..."
+    sudo apt-get install -y samba
+fi
+
+read -rp "Enter Samba username [ryuzaki]: " username
+username="${username:-ryuzaki}"
+
+if ! id "$username" &>/dev/null; then
+    echo "User '$username' does not exist on this system. Create the Unix user first or use an existing one."
+    exit 1
+fi
+
+for attempt in 1 2 3; do
+    echo "Enter SMB password for $username (attempt $attempt/3):"
+    read -rsp "Password: " password
+    echo
+    read -rsp "Confirm password: " password_confirm
+    echo
+    if [[ -n "$password" && "$password" == "$password_confirm" ]]; then
+        break
+    fi
+    if [[ $attempt -lt 3 ]]; then
+        echo "Passwords do not match or are empty. Try again."
+    else
+        echo "Too many failed attempts."
+        exit 1
+    fi
+done
+
+echo "Writing $SMB_CONF..."
+sudo tee "$SMB_CONF" > /dev/null <<SMBCONF
+[global]
+workgroup = WORKGROUP
+server string = RPi5
+netbios name = RPI5
+security = user
+server role = standalone server
+map to guest = Bad User
+dns proxy = no
+obey pam restrictions = yes
+unix password sync = yes
+passwd program = /usr/bin/passwd %u
+pam password change = yes
+usershare allow guests = yes
+log file = /var/log/samba/log.%m
+max log size = 1000
+logging = file
+ntlm auth = yes
+raw NTLMv2 auth = yes
+min protocol = SMB2
+max protocol = SMB3
+
+[$username]
+comment = $username's shared files
+path = /home/$username
+browseable = yes
+read only = no
+valid users = $username
+create mask = 0644
+directory mask = 0755
+force user = $username
+vfs objects = fruit recycle
+fruit:aapl = yes
+fruit:metadata = stream
+fruit:model = RPi5
+fruit:advertise_fullsync = true
+recycle:repository = .recycle/%U
+recycle:keeptree = yes
+recycle:touch = yes
+recycle:versions = yes
+recycle:maxsize = 0
+SMBCONF
+
+if ! command -v expect &>/dev/null; then
+    sudo apt-get install -y -qq expect
+fi
+
+echo "Setting SMB password for $username..."
+expect <<EXPSETUP 2>&1 | grep -v "^spawn\|^$\|^New SMB\|^Retype"
+set timeout 10
+spawn sudo smbpasswd -a $username
+expect "New SMB password:"
+send "$password\r"
+expect "Retype new SMB password:"
+send "$password\r"
+expect eof
+EXPSETUP
+
+echo "Enabling and starting smbd..."
+sudo systemctl enable --now smbd
+
+ipaddr=$(hostname -I | awk '{print $1}')
+echo "=== Samba setup complete! ==="
+echo "Connect from iPad via: smb://$ipaddr/$username"
