@@ -128,13 +128,14 @@ Configures Fish as the login shell.
 Declarative package list installed via `home.packages`. Grouped by category:
 
 | Category | Packages |
-|---|---|
+|---|---|---|
 | Editors | `neovim`, `code-server`, `opencode` |
 | Dev tools | `lazygit`, `tmux` |
 | System info | `fastfetch`, `nitch`, `btop`, `clock-rs` |
-| Media & graphics | `chafa`, `timg`, `mpv`, `ffmpeg`, `yt-dlp`, `yazi` |
-| Networking & chat | `browsh`, `nchat`, `bluetuith`, `wifitui`, `reddit-tui`, `smassh`, `gemini-cli` |
+| Media & graphics | `chafa`, `timg`, `mpv`, `ffmpeg`, `yt-dlp`, `yazi`, `pandoc`, `localsend`, `jocalsend` |
+| Networking & chat | `browsh`, `nchat`, `bluetuith`, `wifitui`, `reddit-tui`, `reddix`, `discordo`, `wiki-tui`, `hackernews-tui`, `youtube-tui`, `smassh`, `gemini-cli`, `mangal` |
 | Obsidian TUIs | `basalt`, `obsitui`, `nixvim-editor` |
+| Flashcards | `srl-tui` |
 | Fun | `cmatrix` |
 
 > **Note:** `wifitui` requires your user to be in the `netdev` group and a polkit rule allowing NetworkManager actions. On Debian systems, run:
