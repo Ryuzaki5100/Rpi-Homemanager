@@ -22,19 +22,21 @@
       obsitui = pkgs.callPackage ./pkgs/obsitui.nix { };
       nixvim-editor = pkgs.callPackage ./pkgs/nixvim-editor.nix { };
       srl-tui = pkgs.callPackage ./pkgs/srl-tui.nix { };
+      gmail-mcp-auth = pkgs.callPackage ./pkgs/gmail-mcp-auth.nix { };
 
       pkgs' = import nixpkgs {
         inherit system;
         overlays = [
           (final: prev: {
             srl-tui = prev.callPackage ./pkgs/srl-tui.nix { };
+            gmail-mcp-auth = prev.callPackage ./pkgs/gmail-mcp-auth.nix { };
           })
         ];
       };
     in
     {
       packages.${system} = {
-        inherit obsitui nixvim-editor srl-tui;
+        inherit obsitui nixvim-editor srl-tui gmail-mcp-auth;
       };
 
       homeConfigurations.ryuzaki = home-manager.lib.homeManagerConfiguration {

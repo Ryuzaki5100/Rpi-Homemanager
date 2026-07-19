@@ -11,6 +11,7 @@
     ./modules/fish.nix
     ./modules/packages.nix
     ./modules/obsidian.nix
+    ./modules/opencode.nix
     ./modules/gmail-mcp.nix
   ];
 

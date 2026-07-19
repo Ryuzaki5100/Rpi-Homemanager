@@ -4,7 +4,6 @@ set -euo pipefail
 GMCP_DIR="${HOME}/.config/gmail-mcp"
 CREDS="${GMCP_DIR}/credentials.json"
 TOKEN="${GMCP_DIR}/token.json"
-AUTH_SCRIPT="$(dirname "$0")/gmail-mcp-auth.py"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -59,7 +58,7 @@ else
     echo ""
 
     # Generate the auth URL
-    uv run "${AUTH_SCRIPT}"
+    gmail-mcp-auth
     echo ""
 
     echo "────────────────────────────────────────────────────────────"
@@ -74,14 +73,14 @@ else
     read -rp "Redirect URL: " redirect_url
 
     # Extract code and exchange
-    uv run "${AUTH_SCRIPT}" "${redirect_url}"
+    gmail-mcp-auth "${redirect_url}"
     echo ""
 
     if [ -f "${TOKEN}" ]; then
         info "OAuth token obtained successfully!"
     else
         error "Failed to obtain token. Run manually:"
-        echo "  uv run ${AUTH_SCRIPT} 'YOUR_CODE'"
+        echo "  gmail-mcp-auth 'YOUR_CODE'"
         exit 1
     fi
 fi

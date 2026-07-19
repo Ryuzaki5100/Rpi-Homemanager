@@ -3,10 +3,10 @@
 Headless OAuth2 helper for Gmail MCP.
 Usage:
   1. Generate auth URL:
-       uv run gmail-mcp-auth.py
+       gmail-mcp-auth
   2. Open URL in browser, authorize, copy the redirect URL's ?code=... parameter
   3. Exchange code for token:
-       uv run gmail-mcp-auth.py '4/0A...'
+       gmail-mcp-auth '4/0A...'
 """
 
 import json, os, sys
@@ -29,7 +29,7 @@ def step1_generate_url():
     print(auth_url)
     print("\nAfter authorizing, the browser will redirect to a broken localhost page.")
     print("Copy the FULL redirect URL from the address bar, then run:")
-    print(f"  uv run {sys.argv[0]} 'THE_CODE_FROM_THE_URL'")
+    print(f"  gmail-mcp-auth 'THE_CODE_FROM_THE_URL'")
     print()
 
 
@@ -57,7 +57,9 @@ if __name__ == "__main__":
 
     if len(sys.argv) > 1:
         code = sys.argv[1]
-        if code.startswith("http"):
+        if not code.startswith("http"):
+            code = "http://" + code
+        if "?" in code:
             parsed = urlparse(code)
             code = parse_qs(parsed.query).get("code", [None])[0]
         if not code:

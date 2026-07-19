@@ -15,11 +15,13 @@ Personal Home Manager configuration for a terminal-centric workflow on `aarch64-
   - [core.nix](#corenix)
   - [env.nix](#envnix)
   - [fish.nix](#fishnix)
-  - [gmail-mcp.nix](#gmail-mcpnix)
+  - [opencode.nix](#opencodenix)
   - [packages.nix](#packagesnix)
+  - [gmail-mcp.nix](#gmail-mcpnix)
   - [obsidian.nix](#obsidiannix)
 - [Custom Packages](#custom-packages)
   - [nixvim-editor](#nixvim-editor)
+  - [gmail-mcp-auth](#gmail-mcp-auth)
   - [obsitui](#obsitui)
 - [Quick Start](#quick-start)
   - [Gmail MCP Setup](#gmail-mcp-setup)
@@ -31,17 +33,23 @@ Personal Home Manager configuration for a terminal-centric workflow on `aarch64-
 ```
 flake.nix  ──►  home.nix  ──►  modules/*.nix
                       │
-                      └── pkgs/
-                            ├── nixvim-editor.nix
-                            └── obsitui.nix
+                      ├── pkgs/
+                      │     ├── nixvim-editor.nix
+                      │     ├── obsitui.nix
+                      │     └── gmail-mcp-auth.nix
+                      │
+                      └── skills/
+                            ├── skill-creator/SKILL.md
+                            └── update-docs/SKILL.md
 ```
 
 | Layer | Description |
 |---|---|
 | **`flake.nix`** | Entry point. Pins `nixpkgs` (nixos-unstable) and `home-manager`. Builds custom packages and passes them as `extraSpecialArgs` into the module tree. |
-| **`home.nix`** | Thin shim; imports all six modules under `modules/`. Receives `obsitui` and `nixvim-editor` as extra arguments. |
+| **`home.nix`** | Thin shim; imports all eight modules under `modules/`. Receives custom packages as extra arguments. |
 | **`modules/`** | Self-contained Nix files, each responsible for one concern. |
 | **`pkgs/`** | Custom package derivations exported both as flake outputs and installed in the Home Manager profile. |
+| **`skills/`** | OpenCode skill definitions (SKILL.md files) deployed via `xdg.configFile` symlinks. |
 
 ### Dependencies
 
@@ -52,11 +60,12 @@ flake.nix  ──►  home.nix  ──►  modules/*.nix
 
 ### Custom Packages as Flake Outputs
 
-Both `obsitui` and `nixvim-editor` are exposed under `packages.aarch64-linux`, making them usable from outside this flake:
+Custom packages are exposed under `packages.aarch64-linux`, making them usable from outside this flake:
 
 ```bash
 nix run github:Ryuzaki5100/dotfiles#obsitui
 nix run github:Ryuzaki5100/dotfiles#nixvim-editor
+nix run github:Ryuzaki5100/dotfiles#gmail-mcp-auth
 ```
 
 ## Structure
@@ -70,16 +79,23 @@ dotfiles/
 │   ├── core.nix           # User identity & state version
 │   ├── env.nix            # Session environment variables
 │   ├── fish.nix           # Fish shell config & aliases
-│   ├── gmail-mcp.nix      # Gmail MCP server for OpenCode
-│   ├── packages.nix       # Declarative package list
-│   └── obsidian.nix       # Obsidian vaults & Basalt config
+│   ├── gmail-mcp.nix      # Gmail MCP auth packages
+│   ├── obsidian.nix       # Obsidian vaults & Basalt config
+│   ├── opencode.nix       # OpenCode config & MCP settings
+│   └── packages.nix       # Declarative package list
+├── pkgs/
+│   ├── gmail-mcp-auth.nix # Wrapper around gmail-mcp-auth.py (python + google-auth-oauthlib)
+│   ├── nixvim-editor.nix  # Thin wrapper around external Nixvim flake
+│   └── obsitui.nix        # Obsidian TUI from source (npm)
 ├── scripts/
 │   ├── gmail-mcp-auth.py  # Headless OAuth helper for Gmail MCP
+│   ├── init-home-manager.sh # Bootstrap Home Manager on a fresh system
 │   ├── init-setup-samba   # Samba initial setup
-│   └── setup-gmail-mcp.sh # Interactive Gmail MCP setup wizard
-└── pkgs/
-    ├── nixvim-editor.nix  # Thin wrapper around external Nixvim flake
-    └── obsitui.nix        # Obsidian TUI from source (npm)
+│   ├── setup-gmail-mcp.sh # Interactive Gmail MCP setup wizard
+│   └── setup-rpi-usb-gadget.sh # Configure RPi as USB ethernet gadget
+└── skills/
+    ├── skill-creator/     # OpenCode skill: interactive skill creation wizard
+    └── update-docs/       # OpenCode skill: auto-update docs from git changes
 ```
 
 ## Modules
@@ -123,6 +139,18 @@ Configures Fish as the login shell.
 | `clock` | `clock-rs -c bright-black -B -b` |
 | `display` | `chafa -f kitty --fit-width` |
 
+### opencode.nix
+
+Configures [OpenCode](https://opencode.ai) — an AI coding assistant — via `programs.opencode`.
+
+**MCP server configuration:**
+- Defines a Gmail MCP server using `mcp-google-gmail` with paths to OAuth credentials and token
+- The MCP server is **disabled by default** — enable with `opencode mcp toggle gmail` or set `programs.opencode.settings.mcp.gmail.enabled = true`
+
+**Skill deployment:**
+- Automatically discovers subdirectories under `skills/` and symlinks each `SKILL.md` into `~/.config/opencode/skills/<name>/`
+- This makes locally-developed skills available to OpenCode without manual copying
+
 ### packages.nix
 
 Declarative package list installed via `home.packages`. Grouped by category:
@@ -153,40 +181,20 @@ Declarative package list installed via `home.packages`. Grouped by category:
 
 ### gmail-mcp.nix
 
-Sets up a self-hosted [MCP server](https://modelcontextprotocol.io) for Gmail, allowing OpenCode to
-read, search, send, draft, label, and manage emails — all through natural language.
+Installs packages needed for Gmail MCP authentication — `uv` and `gmail-mcp-auth`.
 
-The MCP server is **disabled by default**. To enable it, set
-`programs.opencode.settings.mcp.gmail.enabled = true` in your config, or run
-`opencode mcp toggle gmail` after deployment.
+The MCP server configuration itself was moved to [`opencode.nix`](#opencodenix).
 
 **What it does:**
-- Installs `uv` (Python package manager) for running the MCP server
-- Configures `programs.opencode.settings.mcp.gmail` with the server command, paths to OAuth credentials, and token file
-- Generates `~/.config/opencode/opencode.json` with the MCP entry (disabled by default)
-
-**MCP server:** [`mcp-google-gmail`](https://github.com/gnodet/mcp-google-gmail) — a pure Python MCP server with 15 tools (search, read, send, draft, label, trash).
-
-**Setup** (one-time, after `home-manager switch`):
-1. Create OAuth credentials in Google Cloud Console (see [Manual Setup](#gmail-mcp-setup) below)
-2. Place `credentials.json` at `~/.config/gmail-mcp/credentials.json`
-3. Run the auth flow to generate `token.json`:
-   ```bash
-   uv run ~/dotfiles/scripts/gmail-mcp-auth.py
-   ```
-   Or use the interactive script:
-   ```bash
-   bash ~/dotfiles/scripts/setup-gmail-mcp.sh
-   ```
+- Installs `uv` (Python package manager)
+- Installs `gmail-mcp-auth` — a system-level wrapper around `gmail-mcp-auth.py` that bundles `google-auth-oauthlib`
 
 **Reproducibility:**
 | Aspect | Reproducible? | How |
 |--------|-------------|-----|
 | HM module (`gmail-mcp.nix`) | ✅ In git | Declared in Nix |
 | `uv` installation | ✅ Via HM | `home.packages = [ pkgs.uv ]` |
-| MCP config in `opencode.json` | ✅ Via HM | `programs.opencode.settings.mcp` |
-| `credentials.json` | ❌ One-time | Must be downloaded from Google Cloud Console |
-| `token.json` | ❌ One-time | Generated by OAuth flow (or copy across machines) |
+| `gmail-mcp-auth` | ✅ Via HM | Built from `pkgs/gmail-mcp-auth.nix` |
 
 **On a new machine:**
 ```bash
@@ -221,6 +229,15 @@ nix run github:Ryuzaki5100/nixvim --refresh -- "$@"
 
 Used as the system `EDITOR` and referenced by Basalt keybindings for opening notes.
 
+### gmail-mcp-auth
+
+A `writeShellScriptBin` wrapper that bundles `gmail-mcp-auth.py` with a Python environment containing `google-auth-oauthlib`. Provides a system-level `gmail-mcp-auth` command for headless OAuth2 authorization with Gmail.
+
+| Attribute | Value |
+|---|---|
+| Source | `scripts/gmail-mcp-auth.py` |
+| Runtime | Python 3 with `google-auth-oauthlib` |
+
 ### obsitui
 
 Builds [obsitui](https://github.com/atr0t0s/obsitui) — a terminal UI for browsing and editing Obsidian vaults — from source using `buildNpmPackage`. This avoids depending on a pre-built npm release and keeps the toolchain fully within Nix.
@@ -240,12 +257,21 @@ Builds [obsitui](https://github.com/atr0t0s/obsitui) — a terminal UI for brows
 
 ### Installation
 
+**On an existing Home Manager setup:**
+
 ```bash
 # Clone the repository
 git clone https://github.com/Ryuzaki5100/dotfiles ~/dotfiles
 
 # Build and activate the Home Manager configuration
 home-manager switch --flake ~/dotfiles#ryuzaki
+```
+
+**On a fresh system (bootstraps flakes + Home Manager):**
+
+```bash
+git clone https://github.com/Ryuzaki5100/dotfiles ~/dotfiles
+bash ~/dotfiles/scripts/init-home-manager.sh
 ```
 
 ### Updating dependencies
@@ -268,7 +294,7 @@ bash ~/dotfiles/scripts/setup-gmail-mcp.sh
 ```
 
 The script will:
-1. Verify `uv` is installed
+1. Verify `uv` and `gmail-mcp-auth` are installed
 2. Create `~/.config/gmail-mcp/`
 3. If `credentials.json` is missing, prompt you to set it up
 4. If `token.json` is missing, run the OAuth flow (prints URL → you authorize → paste redirect URL)
@@ -314,7 +340,7 @@ The script will:
 home-manager switch --flake ~/dotfiles#ryuzaki
 ```
 
-This installs `uv` and writes the MCP config to `~/.config/opencode/opencode.json`.
+This installs `uv` and `gmail-mcp-auth`, and writes the MCP config to `~/.config/opencode/opencode.json`.
 
 ##### 3. OAuth authorization
 
@@ -328,7 +354,7 @@ On a **headless SSH** machine, use the helper script:
 
 ```bash
 # Step A: Generate auth URL
-uv run ~/dotfiles/scripts/gmail-mcp-auth.py
+gmail-mcp-auth
 ```
 
 This prints a URL. Open it in your local browser, sign in, click Continue, and grant Gmail permissions.
@@ -336,7 +362,7 @@ The browser will redirect to a broken `http://localhost/?code=...` page.
 
 ```bash
 # Step B: Paste the redirect URL to exchange for a token
-uv run ~/dotfiles/scripts/gmail-mcp-auth.py 'http://localhost/?code=4/0A...'
+gmail-mcp-auth 'http://localhost/?code=4/0A...'
 ```
 
 `token.json` is saved to `~/.config/gmail-mcp/token.json`.
