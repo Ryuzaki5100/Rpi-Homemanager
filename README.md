@@ -89,12 +89,14 @@ dotfiles/
 │   ├── nixvim-editor.nix  # Thin wrapper around external Nixvim flake
 │   └── obsitui.nix        # Obsidian TUI from source (npm)
 ├── scripts/
-│   ├── gmail-mcp-auth.py  # Headless OAuth helper for Gmail MCP
-│   ├── init-home-manager.sh # Bootstrap Home Manager on a fresh system
-│   ├── init-setup-samba   # Samba initial setup
-│   ├── setup-gmail-mcp.sh # Interactive Gmail MCP setup wizard
+│   ├── gmail-mcp-auth.py      # Headless OAuth helper for Gmail MCP
+│   ├── init-home-manager.sh   # Bootstrap Home Manager on a fresh system
+│   ├── init-setup-samba       # Samba initial setup
+│   ├── opencode-gateway.py    # HTTP gateway proxy to opencode serve
+│   ├── opencode-serve.sh      # Launch opencode serve and expose on tailnet
+│   ├── setup-gmail-mcp.sh     # Interactive Gmail MCP setup wizard
 │   ├── setup-rpi-usb-gadget.sh # Configure RPi as USB ethernet gadget
-│   └── setup-tailscale.sh # Tailscale auth, status check, and systemd enable
+│   └── setup-tailscale.sh     # Tailscale auth, status check, and systemd enable
 └── skills/
     ├── skill-creator/     # OpenCode skill: interactive skill creation wizard
     └── update-docs/       # OpenCode skill: auto-update docs from git changes
@@ -140,10 +142,15 @@ Configures Fish as the login shell.
 | `search` | `nix search nixpkgs` |
 | `clock` | `clock-rs -c bright-black -B -b` |
 | `display` | `chafa -f kitty --fit-width` |
+| `edot` | `cd ~/dotfiles && nixvim` |
+| `dot` | `cd ~/dotfiles` |
+| `ga` | `git add .` |
 
 ### opencode.nix
 
 Configures [OpenCode](https://opencode.ai) — an AI coding assistant — via `programs.opencode`.
+
+**Model:** Default model set to `opencode/deepseek-v4-flash-free`.
 
 **MCP server configuration:**
 - Defines a Gmail MCP server using `mcp-google-gmail` with paths to OAuth credentials and token
@@ -401,6 +408,22 @@ The script will:
 2. Run `tailscale up` — prints an auth URL to open in your browser
 3. Verify the connection via `tailscale status`
 4. Create and enable a systemd `tailscaled.service` unit for auto-start on boot
+5. Write a `sudoers.d` file ensuring Nix binaries are on `secure_path` for sudo commands
+
+### Exposing OpenCode on the Tailnet
+
+Two companion scripts make OpenCode accessible on the tailnet:
+
+- **`scripts/opencode-serve.sh`** — Starts `opencode serve` on all interfaces and exposes it via `tailscale serve`, making the OpenCode API available to other devices on your tailnet.
+- **`scripts/opencode-gateway.py`** — A lightweight HTTP gateway that accepts prompts via `GET`/`POST` and proxies them to the `opencode serve` API. Supports query params, JSON body, form-encoded, and raw text payloads.
+
+```bash
+# Start the serve + tailscale tunnel
+bash ~/dotfiles/scripts/opencode-serve.sh
+
+# Query via the gateway (runs on port 8080 by default)
+curl -d 'Summarize the last 3 git commits' http://localhost:8080
+```
 
 ## Usage
 
@@ -412,7 +435,11 @@ The script will:
 | `search <query>` | Search for packages in nixpkgs |
 | `clock` | Show a live clock in the terminal |
 | `display <image>` | Render an image in the terminal via kitty protocol |
+| `dot` | `cd ~/dotfiles` |
+| `edot` | Open dotfiles in Nixvim |
+| `ga` | `git add .` |
 | `bash ~/dotfiles/scripts/setup-tailscale.sh` | Authenticate Tailscale and enable auto-start on boot |
+| `bash ~/dotfiles/scripts/opencode-serve.sh` | Expose OpenCode on the tailnet |
 | `home-manager expire-generations 30d` | Garbage collect old Home Manager generations |
 
 ## Acknowledgements

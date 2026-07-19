@@ -14,6 +14,7 @@ in {
   programs.opencode = {
     enable = true;
     settings = {
+      model = "opencode/deepseek-v4-flash-free";
       mcp = {
         gmail = {
           type = "local";

@@ -22,6 +22,9 @@
       search = "nix search nixpkgs";
       display = "chafa -f kitty --fit-width";
       clock = "clock-rs -c bright-black -B -b";
+      edot = "cd ~/dotfiles && nixvim";
+      dot = "cd ~/dotfiles";
+      ga = "git add .";
     };
   };
 }
