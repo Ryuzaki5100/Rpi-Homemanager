@@ -42,6 +42,7 @@ in
     nchat
     bluetuith
     wifitui
+    tailscale
     reddit-tui
     reddix
     discordo

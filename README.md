@@ -25,6 +25,7 @@ Personal Home Manager configuration for a terminal-centric workflow on `aarch64-
   - [obsitui](#obsitui)
 - [Quick Start](#quick-start)
   - [Gmail MCP Setup](#gmail-mcp-setup)
+  - [Tailscale Setup](#tailscale-setup)
 - [Usage](#usage)
 - [Acknowledgements](#acknowledgements)
 
@@ -92,7 +93,8 @@ dotfiles/
 │   ├── init-home-manager.sh # Bootstrap Home Manager on a fresh system
 │   ├── init-setup-samba   # Samba initial setup
 │   ├── setup-gmail-mcp.sh # Interactive Gmail MCP setup wizard
-│   └── setup-rpi-usb-gadget.sh # Configure RPi as USB ethernet gadget
+│   ├── setup-rpi-usb-gadget.sh # Configure RPi as USB ethernet gadget
+│   └── setup-tailscale.sh # Tailscale auth, status check, and systemd enable
 └── skills/
     ├── skill-creator/     # OpenCode skill: interactive skill creation wizard
     └── update-docs/       # OpenCode skill: auto-update docs from git changes
@@ -161,7 +163,7 @@ Declarative package list installed via `home.packages`. Grouped by category:
 | Dev tools | `lazygit`, `tmux` |
 | System info | `fastfetch`, `nitch`, `btop`, `clock-rs` |
 | Media & graphics | `chafa`, `timg`, `mpv`, `ffmpeg`, `yt-dlp`, `yazi`, `pandoc`, `localsend`, `jocalsend` |
-| Networking & chat | `browsh`, `nchat`, `bluetuith`, `wifitui`, `reddit-tui`, `reddix`, `discordo`, `wiki-tui`, `hackernews-tui`, `youtube-tui`, `smassh`, `gemini-cli`, `mangal` |
+| Networking & chat | `browsh`, `nchat`, `bluetuith`, `wifitui`, `tailscale`, `reddit-tui`, `reddix`, `discordo`, `wiki-tui`, `hackernews-tui`, `youtube-tui`, `smassh`, `gemini-cli`, `mangal` |
 | Obsidian TUIs | `basalt`, `obsitui`, `nixvim-editor` |
 | Flashcards | `srl-tui` |
 | Fun | `cmatrix` |
@@ -385,6 +387,21 @@ Ask OpenCode:
 
 </details>
 
+### Tailscale Setup
+
+One-time setup to authenticate and enable Tailscale for auto-start on boot:
+
+```bash
+# After home-manager switch --flake ~/dotfiles
+bash ~/dotfiles/scripts/setup-tailscale.sh
+```
+
+The script will:
+1. Start the `tailscaled` daemon (if not already running)
+2. Run `tailscale up` — prints an auth URL to open in your browser
+3. Verify the connection via `tailscale status`
+4. Create and enable a systemd `tailscaled.service` unit for auto-start on boot
+
 ## Usage
 
 | Command | Description |
@@ -395,6 +412,7 @@ Ask OpenCode:
 | `search <query>` | Search for packages in nixpkgs |
 | `clock` | Show a live clock in the terminal |
 | `display <image>` | Render an image in the terminal via kitty protocol |
+| `bash ~/dotfiles/scripts/setup-tailscale.sh` | Authenticate Tailscale and enable auto-start on boot |
 | `home-manager expire-generations 30d` | Garbage collect old Home Manager generations |
 
 ## Acknowledgements
