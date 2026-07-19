@@ -65,6 +65,7 @@ in
 
     # Fun
     cmatrix
+    posting
 
     # Automation tools
     # openclaw

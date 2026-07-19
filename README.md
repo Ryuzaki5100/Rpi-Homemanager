@@ -94,6 +94,7 @@ dotfiles/
 │   ├── init-setup-samba       # Samba initial setup
 │   ├── opencode-gateway.py    # HTTP gateway proxy to opencode serve
 │   ├── opencode-serve.sh      # Launch opencode serve and expose on tailnet
+│   ├── download-vid.sh        # Download 4K video with yt-dlp and ffmpeg
 │   ├── setup-gmail-mcp.sh     # Interactive Gmail MCP setup wizard
 │   ├── setup-rpi-usb-gadget.sh # Configure RPi as USB ethernet gadget
 │   └── setup-tailscale.sh     # Tailscale auth, status check, and systemd enable
@@ -173,7 +174,7 @@ Declarative package list installed via `home.packages`. Grouped by category:
 | Networking & chat | `browsh`, `nchat`, `bluetuith`, `wifitui`, `tailscale`, `reddit-tui`, `reddix`, `discordo`, `wiki-tui`, `hackernews-tui`, `youtube-tui`, `smassh`, `gemini-cli`, `mangal` |
 | Obsidian TUIs | `basalt`, `obsitui`, `nixvim-editor` |
 | Flashcards | `srl-tui` |
-| Fun | `cmatrix` |
+| Fun | `cmatrix`, `posting` |
 
 > **Note:** `wifitui` requires your user to be in the `netdev` group and a polkit rule allowing NetworkManager actions. On Debian systems, run:
 >
@@ -438,6 +439,7 @@ curl -d 'Summarize the last 3 git commits' http://localhost:8080
 | `dot` | `cd ~/dotfiles` |
 | `edot` | Open dotfiles in Nixvim |
 | `ga` | `git add .` |
+| `bash ~/dotfiles/scripts/download-vid.sh` | Download a 4K video from a URL using yt-dlp + ffmpeg |
 | `bash ~/dotfiles/scripts/setup-tailscale.sh` | Authenticate Tailscale and enable auto-start on boot |
 | `bash ~/dotfiles/scripts/opencode-serve.sh` | Expose OpenCode on the tailnet |
 | `home-manager expire-generations 30d` | Garbage collect old Home Manager generations |
