@@ -133,7 +133,7 @@ Configures Fish as the login shell.
 **Aliases:**
 
 | Alias | Command |
-|---|---|---|
+|---|---|
 | `nixvim` | `nix run github:Ryuzaki5100/nixvim --refresh` |
 | `rebuild-home-manager` | `home-manager switch --flake ~/dotfiles#ryuzaki` |
 | `update-home-manager` | `cd ~/dotfiles && nix flake update && cd -` |
@@ -158,7 +158,7 @@ Configures [OpenCode](https://opencode.ai) — an AI coding assistant — via `p
 Declarative package list installed via `home.packages`. Grouped by category:
 
 | Category | Packages |
-|---|---|---|
+|---|---|
 | Editors | `neovim`, `code-server`, `opencode` |
 | Dev tools | `lazygit`, `tmux` |
 | System info | `fastfetch`, `nitch`, `btop`, `clock-rs` |
