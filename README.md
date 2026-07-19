@@ -156,10 +156,14 @@ Declarative package list installed via `home.packages`. Grouped by category:
 Sets up a self-hosted [MCP server](https://modelcontextprotocol.io) for Gmail, allowing OpenCode to
 read, search, send, draft, label, and manage emails — all through natural language.
 
+The MCP server is **disabled by default**. To enable it, set
+`programs.opencode.settings.mcp.gmail.enabled = true` in your config, or run
+`opencode mcp toggle gmail` after deployment.
+
 **What it does:**
 - Installs `uv` (Python package manager) for running the MCP server
 - Configures `programs.opencode.settings.mcp.gmail` with the server command, paths to OAuth credentials, and token file
-- Generates `~/.config/opencode/opencode.json` with the MCP entry
+- Generates `~/.config/opencode/opencode.json` with the MCP entry (disabled by default)
 
 **MCP server:** [`mcp-google-gmail`](https://github.com/gnodet/mcp-google-gmail) — a pure Python MCP server with 15 tools (search, read, send, draft, label, trash).
 
@@ -269,6 +273,10 @@ The script will:
 3. If `credentials.json` is missing, prompt you to set it up
 4. If `token.json` is missing, run the OAuth flow (prints URL → you authorize → paste redirect URL)
 5. Verify the MCP server is connected
+
+> **Note:** The MCP server is disabled by default. After setup, enable it with
+> `opencode mcp toggle gmail`, or set `programs.opencode.settings.mcp.gmail.enabled = true`
+> in your flake configuration.
 
 #### Manual (step-by-step)
 

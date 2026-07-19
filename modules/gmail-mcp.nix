@@ -12,7 +12,7 @@ in
       mcp = {
         gmail = {
           type = "local";
-          enabled = true;
+          enabled = false;
           command = [ "uvx" "mcp-google-gmail@latest" ];
           environment = {
             GMAIL_CREDENTIALS_PATH = "${gmailDir}/credentials.json";
