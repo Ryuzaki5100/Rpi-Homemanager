@@ -147,6 +147,12 @@ Configures Fish as the login shell.
 | `dot` | `cd ~/dotfiles` |
 | `ga` | `git add .` |
 
+**Functions:**
+
+| Function | Description |
+|---|---|
+| `generate-ssh-key` | Prompts for an email and generates an Ed25519 SSH key (`ssh-keygen -t ed25519 -C "<email>"`) |
+
 ### opencode.nix
 
 Configures [OpenCode](https://opencode.ai) — an AI coding assistant — via `programs.opencode`.
@@ -439,6 +445,7 @@ curl -d 'Summarize the last 3 git commits' http://localhost:8080
 | `dot` | `cd ~/dotfiles` |
 | `edot` | Open dotfiles in Nixvim |
 | `ga` | `git add .` |
+| `generate-ssh-key` | Generate an Ed25519 SSH key for a given email |
 | `bash ~/dotfiles/scripts/download-vid.sh` | Download a 4K video from a URL using yt-dlp + ffmpeg |
 | `bash ~/dotfiles/scripts/setup-tailscale.sh` | Authenticate Tailscale and enable auto-start on boot |
 | `bash ~/dotfiles/scripts/opencode-serve.sh` | Expose OpenCode on the tailnet |

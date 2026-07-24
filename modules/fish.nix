@@ -26,5 +26,14 @@
       dot = "cd ~/dotfiles";
       ga = "git add .";
     };
+
+    functions = {
+      generate-ssh-key = {
+        body = ''
+          read -P "Enter your email: " email
+          ssh-keygen -t ed25519 -C "$email"
+        '';
+      };
+    };
   };
 }
