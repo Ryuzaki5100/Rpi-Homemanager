@@ -60,7 +60,7 @@ in
     nixvim-editor
 
     # Flashcards (SM-2 spaced repetition TUI)
-    srl-tui
+    # srl-tui
 
     # Fun
     cmatrix

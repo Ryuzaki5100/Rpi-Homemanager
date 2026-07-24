@@ -181,7 +181,6 @@ Declarative package list installed via `home.packages`. Grouped by category:
 | Media & graphics | `chafa`, `timg`, `mpv`, `ffmpeg`, `yt-dlp`, `yazi`, `pandoc`, `localsend`, `jocalsend` |
 | Networking & chat | `browsh`, `nchat`, `bluetuith`, `wifitui`, `tailscale`, `reddit-tui`, `reddix`, `discordo`, `wiki-tui`, `hackernews-tui`, `youtube-tui`, `smassh`, `gemini-cli`, `mangal` |
 | Obsidian TUIs | `basalt`, `obsitui`, `nixvim-editor` |
-| Flashcards | `srl-tui` |
 | Fun | `cmatrix`, `posting` |
 
 > **Note:** `wifitui` requires your user to be in the `netdev` group and a polkit rule allowing NetworkManager actions. On Debian systems, run:
