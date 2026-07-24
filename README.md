@@ -91,6 +91,7 @@ dotfiles/
 ├── scripts/
 │   ├── gmail-mcp-auth.py      # Headless OAuth helper for Gmail MCP
 │   ├── init-home-manager.sh   # Bootstrap Home Manager on a fresh system
+│   ├── install-nix.sh         # Install Nix with --daemon on a fresh system
 │   ├── init-setup-samba       # Samba initial setup
 │   ├── opencode-gateway.py    # HTTP gateway proxy to opencode serve
 │   ├── opencode-serve.sh      # Launch opencode serve and expose on tailnet
@@ -271,6 +272,9 @@ Builds [obsitui](https://github.com/atr0t0s/obsitui) — a terminal UI for brows
 - Nix with flakes enabled (`nix-command` and `flakes` experimental features)
 - Home Manager installed
 
+> **On a truly fresh system without Nix**, run `bash ~/dotfiles/scripts/install-nix.sh` first
+> to install Nix with `--daemon` mode, then log out and back in before proceeding.
+
 ### Installation
 
 **On an existing Home Manager setup:**
@@ -446,6 +450,7 @@ curl -d 'Summarize the last 3 git commits' http://localhost:8080
 | `edot` | Open dotfiles in Nixvim |
 | `ga` | `git add .` |
 | `generate-ssh-key` | Generate an Ed25519 SSH key for a given email |
+| `bash ~/dotfiles/scripts/install-nix.sh` | Install Nix with --daemon on a fresh system |
 | `bash ~/dotfiles/scripts/download-vid.sh` | Download a 4K video from a URL using yt-dlp + ffmpeg |
 | `bash ~/dotfiles/scripts/setup-tailscale.sh` | Authenticate Tailscale and enable auto-start on boot |
 | `bash ~/dotfiles/scripts/opencode-serve.sh` | Expose OpenCode on the tailnet |

@@ -19,10 +19,14 @@ echo "==> Adding dwc2 overlay in config.txt..."
 
 CONFIG=/boot/firmware/config.txt
 
-if grep -q "^dtoverlay=dwc2" "$CONFIG" 2>/dev/null; then
-    echo "    dtoverlay=dwc2 already present, skipping."
+if grep -q '^dtoverlay=dwc2' <(grep -A5 '^\[all\]' "$CONFIG") 2>/dev/null; then
+    echo "    dtoverlay=dwc2 already present under [all], skipping."
 else
-    sudo sed -i '/^\[all\]/a dtoverlay=dwc2' "$CONFIG"
+    if grep -q '^\[all\]' "$CONFIG" 2>/dev/null; then
+        sudo sed -i '/^\[all\]/a dtoverlay=dwc2' "$CONFIG"
+    else
+        printf '\n[all]\ndtoverlay=dwc2\n' | sudo tee -a "$CONFIG" >/dev/null
+    fi
 fi
 
 echo "==> Creating ethernet-usb0 NetworkManager connection..."
