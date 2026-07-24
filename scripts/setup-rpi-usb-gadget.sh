@@ -19,7 +19,7 @@ echo "==> Adding dwc2 overlay in config.txt..."
 
 CONFIG=/boot/firmware/config.txt
 
-if grep -q '^dtoverlay=dwc2' <(grep -A5 '^\[all\]' "$CONFIG") 2>/dev/null; then
+if grep -A20 '^\[all\]' "$CONFIG" | grep -q '^dtoverlay=dwc2'; then
     echo "    dtoverlay=dwc2 already present under [all], skipping."
 else
     if grep -q '^\[all\]' "$CONFIG" 2>/dev/null; then
