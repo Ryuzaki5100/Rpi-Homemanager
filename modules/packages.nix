@@ -35,7 +35,6 @@ in
     yazi
     pandoc
     localsend
-    jocalsend
 
     # Networking & chat
     browsh

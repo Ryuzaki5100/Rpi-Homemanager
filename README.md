@@ -98,7 +98,8 @@ dotfiles/
 │   ├── download-vid.sh        # Download 4K video with yt-dlp and ffmpeg
 │   ├── setup-gmail-mcp.sh     # Interactive Gmail MCP setup wizard
 │   ├── setup-rpi-usb-gadget.sh # Configure RPi as USB ethernet gadget
-│   └── setup-tailscale.sh     # Tailscale auth, status check, and systemd enable
+│   ├── setup-tailscale.sh     # Tailscale auth, status check, and systemd enable
+│   └── setup-wayvnc.sh        # Set up WayVNC VNC server for iPad access
 └── skills/
     ├── skill-creator/     # OpenCode skill: interactive skill creation wizard
     └── update-docs/       # OpenCode skill: auto-update docs from git changes
