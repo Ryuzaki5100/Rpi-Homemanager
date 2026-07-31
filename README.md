@@ -18,6 +18,7 @@ Personal Home Manager configuration for a terminal-centric workflow on `aarch64-
   - [opencode.nix](#opencodenix)
   - [packages.nix](#packagesnix)
   - [gmail-mcp.nix](#gmail-mcpnix)
+  - [immich.nix](#immichnix)
   - [obsidian.nix](#obsidiannix)
 - [Custom Packages](#custom-packages)
   - [nixvim-editor](#nixvim-editor)
@@ -26,6 +27,7 @@ Personal Home Manager configuration for a terminal-centric workflow on `aarch64-
 - [Quick Start](#quick-start)
   - [Gmail MCP Setup](#gmail-mcp-setup)
   - [Tailscale Setup](#tailscale-setup)
+  - [Immich Setup](#immich-setup)
 - [Usage](#usage)
 - [Acknowledgements](#acknowledgements)
 
@@ -81,6 +83,7 @@ dotfiles/
 │   ├── env.nix            # Session environment variables
 │   ├── fish.nix           # Fish shell config & aliases
 │   ├── gmail-mcp.nix      # Gmail MCP auth packages
+│   ├── immich.nix         # Immich docker-compose config & env
 │   ├── obsidian.nix       # Obsidian vaults & Basalt config
 │   ├── opencode.nix       # OpenCode config & MCP settings
 │   └── packages.nix       # Declarative package list
@@ -97,9 +100,11 @@ dotfiles/
 │   ├── opencode-serve.sh      # Launch opencode serve and expose on tailnet
 │   ├── download-vid.sh        # Download 4K video with yt-dlp and ffmpeg
 │   ├── setup-gmail-mcp.sh     # Interactive Gmail MCP setup wizard
+│   ├── setup-immich.sh        # Bootstrap Docker daemon and start Immich
 │   ├── setup-rpi-usb-gadget.sh # Configure RPi as USB ethernet gadget
 │   ├── setup-tailscale.sh     # Tailscale auth, status check, and systemd enable
-│   └── setup-wayvnc.sh        # Set up WayVNC VNC server for iPad access
+│   ├── setup-wayvnc.sh        # Set up WayVNC VNC server for iPad access
+│   └── sync-to-ssd.sh         # Sync Immich albums to an external drive
 └── skills/
     ├── skill-creator/     # OpenCode skill: interactive skill creation wizard
     └── update-docs/       # OpenCode skill: auto-update docs from git changes
@@ -177,6 +182,7 @@ Declarative package list installed via `home.packages`. Grouped by category:
 |---|---|
 | Editors | `neovim`, `code-server`, `opencode` |
 | Dev tools | `lazygit`, `tmux` |
+| Containers | `docker`, `docker-compose`, `jq` |
 | System info | `fastfetch`, `nitch`, `btop`, `clock-rs` |
 | Media & graphics | `chafa`, `timg`, `mpv`, `ffmpeg`, `yt-dlp`, `yazi`, `pandoc`, `localsend`, `jocalsend` |
 | Networking & chat | `browsh`, `nchat`, `bluetuith`, `wifitui`, `tailscale`, `reddit-tui`, `reddix`, `discordo`, `wiki-tui`, `hackernews-tui`, `youtube-tui`, `smassh`, `gemini-cli`, `mangal` |
@@ -220,6 +226,21 @@ home-manager switch --flake ~/dotfiles#ryuzaki
 # Copy credentials.json to ~/.config/gmail-mcp/credentials.json
 bash ~/dotfiles/scripts/setup-gmail-mcp.sh
 ```
+
+### immich.nix
+
+Deploys [Immich](https://immich.app) — a self-hosted photo and video management server — as a Docker Compose stack.
+
+**What it writes:**
+- `~/.config/immich/docker-compose.yml` — Immich server, machine learning, Redis (Valkey), and PostgreSQL services, exposed on port `2283`
+- `~/.config/immich/.env` — storage locations, `TZ=Asia/Kolkata`, and pinned `IMMICH_VERSION=v3`
+- Creates `~/immich/postgres` for database data
+
+**Storage layout:**
+- `~/immich/library` — photo/video uploads; intended to be a symlink to `/mnt/hdd/immich/library` (see `make immich-link-library`)
+- `~/immich/postgres` — database data (must stay on local disk, not a network mount)
+
+**Note:** All services use `restart: "no"` — containers are started and stopped explicitly via the Makefile targets, not auto-restarted on boot.
 
 ### obsidian.nix
 
@@ -421,6 +442,48 @@ The script will:
 4. Create and enable a systemd `tailscaled.service` unit for auto-start on boot
 5. Write a `sudoers.d` file ensuring Nix binaries are on `secure_path` for sudo commands
 
+### Immich Setup
+
+Immich runs as a Docker Compose stack configured by the [`immich.nix`](#immichnix) module. The compose file, `.env`, and directory scaffolding are created automatically on `home-manager switch`.
+
+**Prerequisites:** Docker daemon and CLI (installed via Home Manager — see [packages.nix](#packagesnix)), plus an HDD mounted at `/mnt/hdd` for photo storage.
+
+**First-time setup:**
+
+```bash
+# Link ~/immich/library -> /mnt/hdd/immich/library, start the daemon, pull, and start
+make -C ~/dotfiles immich-setup
+```
+
+On a Debian system where the Docker daemon is not yet running, use the bootstrap script instead:
+
+```bash
+bash ~/dotfiles/scripts/setup-immich.sh
+```
+
+Then open `http://<ip>:2283` to complete first-run setup.
+
+**Managing the stack** (all commands via `make -C ~/dotfiles`):
+
+| Command | Description |
+|---|---|
+| `immich-hdd-status` | Show whether `/mnt/hdd` is mounted and list USB disk info |
+| `immich-hdd-mount` | Mount `/mnt/hdd` (by UUID); auto-recovers stale mounts when the drive reconnects |
+| `immich-hdd-unmount` | Safely unmount `/mnt/hdd` |
+| `immich-start` | Start containers (auto-mounts `/mnt/hdd`) |
+| `immich-stop` | Stop containers (daemon stays running) |
+| `immich-shutdown` | Stop containers and the Docker daemon |
+| `immich-restart` | Restart containers |
+| `immich-status` | Show container status |
+| `immich-update` | Pull latest images and restart |
+| `immich-backup` / `immich-restore` | Dump/restore the database to/from `~/immich/backups/` |
+| `immich-sync DEST=DIR` | Sync all albums to an external drive, organized by album name |
+| `immich-ip` | Print the Immich access URL |
+
+Run `make -C ~/dotfiles help` for the full list of targets.
+
+> **Troubleshooting random unmounts:** The HDD is a USB drive (`My Passport`, UUID `7B6D-F242`, exFAT) mounted via `/etc/fstab` with `nofail`. When it drops off the USB bus (check with `sudo dmesg | grep -i usb`), the kernel may leave a **stale mount** at `/mnt/hdd` pointing to a dead device node — `ls /mnt/hdd/` then reports `Input/output error` even though `mountpoint` says mounted. `make immich-hdd-mount` detects this (the mount source no longer matches the live USB device) and remounts. Repeated `USB disconnect` lines in `dmesg` usually indicate a flaky cable, an under-powered USB port, or the enclosure's power management — try a different port/cable and a powered hub.
+
 ### Exposing OpenCode on the Tailnet
 
 Two companion scripts make OpenCode accessible on the tailnet:
@@ -454,6 +517,10 @@ curl -d 'Summarize the last 3 git commits' http://localhost:8080
 | `bash ~/dotfiles/scripts/download-vid.sh` | Download a 4K video from a URL using yt-dlp + ffmpeg |
 | `bash ~/dotfiles/scripts/setup-tailscale.sh` | Authenticate Tailscale and enable auto-start on boot |
 | `bash ~/dotfiles/scripts/opencode-serve.sh` | Expose OpenCode on the tailnet |
+| `make -C ~/dotfiles immich-setup` | First-time Immich setup (start daemon, link library, pull, start) |
+| `bash ~/dotfiles/scripts/setup-immich.sh` | Bootstrap Docker daemon and start Immich (Debian) |
+| `make -C ~/dotfiles immich-sync DEST=DIR` | Sync Immich albums to an external drive |
+| `make -C ~/dotfiles immich-hdd-mount` | Remount `/mnt/hdd` (auto-recovers stale mounts) |
 | `home-manager expire-generations 30d` | Garbage collect old Home Manager generations |
 
 ## Acknowledgements
