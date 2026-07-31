@@ -13,6 +13,7 @@
     ./modules/obsidian.nix
     ./modules/opencode.nix
     ./modules/gmail-mcp.nix
+    ./modules/immich.nix
   ];
 
   nixpkgs.config = {

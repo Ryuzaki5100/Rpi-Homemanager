@@ -20,6 +20,11 @@ in
     lazygit
     tmux
 
+    # Containers
+    docker
+    docker-compose
+    jq
+
     # System info
     fastfetch
     nitch
