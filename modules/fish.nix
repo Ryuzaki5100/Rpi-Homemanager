@@ -26,6 +26,7 @@
       dot = "cd ~/dotfiles";
       ga = "git add .";
       op = "opencode";
+      yt = "~/dotfiles/scripts/download-vid.sh";
     };
 
     functions = {

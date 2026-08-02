@@ -160,6 +160,7 @@ Configures Fish as the login shell.
 | `dot` | `cd ~/dotfiles` |
 | `ga` | `git add .` |
 | `op` | `opencode` |
+| `yt` | `~/dotfiles/scripts/download-vid.sh` |
 
 **Functions:**
 
@@ -547,6 +548,7 @@ curl -d 'Summarize the last 3 git commits' http://localhost:8080
 | `dot` | `cd ~/dotfiles` |
 | `edot` | Open dotfiles in Nixvim |
 | `ga` | `git add .` |
+| `yt` | Download a 4K video via `download-vid.sh` |
 | `generate-ssh-key` | Generate an Ed25519 SSH key for a given email |
 | `bash ~/dotfiles/scripts/install-nix.sh` | Install Nix with --daemon on a fresh system |
 | `bash ~/dotfiles/scripts/download-vid.sh` | Download a 4K video from a URL using yt-dlp + ffmpeg |
