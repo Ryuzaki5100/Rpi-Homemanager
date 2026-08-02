@@ -2,7 +2,7 @@ COMPOSE := docker compose -f $(HOME)/.config/immich/docker-compose.yml
 IMMICH_DIR := $(HOME)/.config/immich
 BACKUP_DIR := $(HOME)/immich/backups
 
-.PHONY: help immich-setup immich-teardown immich-start immich-stop immich-shutdown immich-restart immich-pull immich-update immich-logs immich-logs-server immich-logs-ml immich-logs-postgres immich-logs-redis immich-status immich-exec immich-db-shell immich-sync immich-backup immich-restore immich-clean immich-prune immich-ip immich-check-hdd immich-hdd-mount immich-hdd-unmount immich-hdd-status immich-link-library
+.PHONY: help immich-setup immich-teardown immich-start immich-stop immich-shutdown immich-restart immich-pull immich-update immich-logs immich-logs-server immich-logs-ml immich-logs-postgres immich-logs-redis immich-status immich-exec immich-db-shell immich-sync immich-backup immich-restore immich-clean immich-prune immich-ip immich-check-hdd immich-hdd-mount immich-hdd-unmount immich-hdd-status immich-link-library immich-hdd-undo immich-ssd-undo immich-hdd-backup immich-ssd-backup
 
 help:
 	@echo "Usage: make immich-<target>"
@@ -40,6 +40,12 @@ help:
 	@echo "  immich-backup           - Dump the database to ~/immich/backups/"
 	@echo "  immich-restore          - Restore the database from the latest backup"
 	@echo ""
+	@echo "Samba Shares (undo & backup):"
+	@echo "  immich-hdd-undo         - Restore all files deleted from the HDD Samba share recycle bin"
+	@echo "  immich-ssd-undo         - Restore all files deleted from the SSD Samba share recycle bin"
+	@echo "  immich-hdd-backup       - Rotating snapshot backup of /mnt/hdd -> /mnt/ssd/backups/hdd"
+	@echo "  immich-ssd-backup       - Rotating snapshot backup of /mnt/ssd -> /mnt/hdd/backups/ssd"
+	@echo ""
 	@echo "Maintenance:"
 	@echo "  immich-clean            - Remove stopped containers and dangling images"
 	@echo "  immich-prune            - Remove all unused Docker data (images, networks, volumes)"
@@ -61,7 +67,13 @@ immich-hdd-mount:
 		exit 1; \
 	fi; \
 	SRC=$$(findmnt -no SOURCE /mnt/hdd 2>/dev/null || true); \
-	if [ -n "$$SRC" ] && [ "$$SRC" = "$$CUR" ]; then \
+	OPTS=$$(findmnt -no OPTIONS /mnt/hdd 2>/dev/null || true); \
+	if [ -n "$$SRC" ] && echo "$$OPTS" | grep -q "ro,"; then \
+		echo "==> /mnt/hdd is read-only (I/O errors); remounting..."; \
+		sudo umount -l /mnt/hdd 2>/dev/null; \
+		sudo mount /mnt/hdd; \
+		echo "==> Mounted /mnt/hdd (rw)"; \
+	elif [ -n "$$SRC" ] && [ "$$SRC" = "$$CUR" ]; then \
 		echo "==> /mnt/hdd already mounted ($$SRC)"; \
 	elif [ -n "$$SRC" ]; then \
 		echo "==> Stale mount detected ($$SRC -> $$CUR); remounting..."; \
@@ -88,6 +100,26 @@ immich-hdd-status:
 		echo "==> /mnt/hdd: NOT mounted"; \
 	fi
 	@lsblk -o NAME,SIZE,FSTYPE,LABEL,UUID,MOUNTPOINT /dev/sd* 2>/dev/null || echo "No USB block devices detected"
+
+# --- Samba Shares (recycle-bin undo + rotating backup) ---
+
+immich-hdd-undo:
+	@mountpoint -q /mnt/hdd || { echo "ERROR: /mnt/hdd is not mounted"; exit 1; }
+	bash $(HOME)/dotfiles/scripts/samba-recycle-restore.sh /mnt/hdd
+
+immich-ssd-undo:
+	@mountpoint -q /mnt/ssd || { echo "ERROR: /mnt/ssd is not mounted"; exit 1; }
+	bash $(HOME)/dotfiles/scripts/samba-recycle-restore.sh /mnt/ssd
+
+immich-hdd-backup:
+	@mountpoint -q /mnt/hdd || { echo "ERROR: /mnt/hdd is not mounted"; exit 1; }
+	@mountpoint -q /mnt/ssd || { echo "ERROR: /mnt/ssd is not mounted (backup target)"; exit 1; }
+	bash $(HOME)/dotfiles/scripts/backup-drive.sh /mnt/hdd /mnt/ssd/backups/hdd
+
+immich-ssd-backup:
+	@mountpoint -q /mnt/ssd || { echo "ERROR: /mnt/ssd is not mounted"; exit 1; }
+	@mountpoint -q /mnt/hdd || { echo "ERROR: /mnt/hdd is not mounted (backup target)"; exit 1; }
+	bash $(HOME)/dotfiles/scripts/backup-drive.sh /mnt/ssd /mnt/hdd/backups/ssd
 
 immich-link-library:
 	@if [ -L ~/immich/library ]; then \

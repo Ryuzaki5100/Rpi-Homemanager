@@ -28,6 +28,7 @@ Personal Home Manager configuration for a terminal-centric workflow on `aarch64-
   - [Gmail MCP Setup](#gmail-mcp-setup)
   - [Tailscale Setup](#tailscale-setup)
   - [Immich Setup](#immich-setup)
+  - [Samba Shares](#samba-shares)
 - [Usage](#usage)
 - [Acknowledgements](#acknowledgements)
 
@@ -92,13 +93,15 @@ dotfiles/
 │   ├── nixvim-editor.nix  # Thin wrapper around external Nixvim flake
 │   └── obsitui.nix        # Obsidian TUI from source (npm)
 ├── scripts/
+│   ├── backup-drive.sh        # Rotating hardlink snapshot backup of a mount
 │   ├── gmail-mcp-auth.py      # Headless OAuth helper for Gmail MCP
 │   ├── init-home-manager.sh   # Bootstrap Home Manager on a fresh system
 │   ├── install-nix.sh         # Install Nix with --daemon on a fresh system
-│   ├── init-setup-samba       # Samba initial setup
+│   ├── init-setup-samba       # Samba setup (home, hdd, and ssd shares + recycle bin)
 │   ├── opencode-gateway.py    # HTTP gateway proxy to opencode serve
 │   ├── opencode-serve.sh      # Launch opencode serve and expose on tailnet
 │   ├── download-vid.sh        # Download 4K video with yt-dlp and ffmpeg
+│   ├── samba-recycle-restore.sh # Restore files from a Samba recycle bin
 │   ├── setup-gmail-mcp.sh     # Interactive Gmail MCP setup wizard
 │   ├── setup-immich.sh        # Bootstrap Docker daemon and start Immich
 │   ├── setup-rpi-usb-gadget.sh # Configure RPi as USB ethernet gadget
@@ -153,6 +156,7 @@ Configures Fish as the login shell.
 | `edot` | `cd ~/dotfiles && nixvim` |
 | `dot` | `cd ~/dotfiles` |
 | `ga` | `git add .` |
+| `op` | `opencode` |
 
 **Functions:**
 
@@ -183,7 +187,7 @@ Declarative package list installed via `home.packages`. Grouped by category:
 | Editors | `neovim`, `code-server`, `opencode` |
 | Dev tools | `lazygit`, `tmux` |
 | Containers | `docker`, `docker-compose`, `jq` |
-| System info | `fastfetch`, `nitch`, `btop`, `clock-rs` |
+| System info | `fastfetch`, `nitch`, `btop`, `clock-rs`, `smartmontools`, `exfatprogs` |
 | Media & graphics | `chafa`, `timg`, `mpv`, `ffmpeg`, `yt-dlp`, `yazi`, `pandoc`, `localsend`, `jocalsend` |
 | Networking & chat | `browsh`, `nchat`, `bluetuith`, `wifitui`, `tailscale`, `reddit-tui`, `reddix`, `discordo`, `wiki-tui`, `hackernews-tui`, `youtube-tui`, `smassh`, `gemini-cli`, `mangal` |
 | Obsidian TUIs | `basalt`, `obsitui`, `nixvim-editor` |
@@ -232,9 +236,9 @@ bash ~/dotfiles/scripts/setup-gmail-mcp.sh
 Deploys [Immich](https://immich.app) — a self-hosted photo and video management server — as a Docker Compose stack.
 
 **What it writes:**
-- `~/.config/immich/docker-compose.yml` — Immich server, machine learning, Redis (Valkey), and PostgreSQL services, exposed on port `2283`
-- `~/.config/immich/.env` — storage locations, `TZ=Asia/Kolkata`, and pinned `IMMICH_VERSION=v3`
-- Creates `~/immich/postgres` for database data
+- `~/.config/immich/docker-compose.yml` — Immich server, machine learning, Redis (Valkey), and PostgreSQL services, exposed on port `2283`. The server passes `/dev/video19` through for hardware-accelerated transcoding on the Pi 5 (V4L2 HEVC decoder), and both the server and machine-learning services have Docker healthchecks enabled.
+- `~/.config/immich/.env` — storage locations, `TZ=Asia/Kolkata`, pinned `IMMICH_VERSION=v3`, and `IMMICH_HW_ACCEL_ENABLED=true` for hardware acceleration
+- Creates `~/immich/postgres` for database data and scaffolds the library subdirectories (`profile`, `thumbs`, `upload`, `library`, `backups`, `encoded-video`) inside `~/immich/library`
 
 **Storage layout:**
 - `~/immich/library` — photo/video uploads; intended to be a symlink to `/mnt/hdd/immich/library` (see `make immich-link-library`)
@@ -468,7 +472,7 @@ Then open `http://<ip>:2283` to complete first-run setup.
 | Command | Description |
 |---|---|
 | `immich-hdd-status` | Show whether `/mnt/hdd` is mounted and list USB disk info |
-| `immich-hdd-mount` | Mount `/mnt/hdd` (by UUID); auto-recovers stale mounts when the drive reconnects |
+| `immich-hdd-mount` | Mount `/mnt/hdd` (by UUID); auto-recovers stale mounts and read-only mounts (I/O errors) when the drive reconnects |
 | `immich-hdd-unmount` | Safely unmount `/mnt/hdd` |
 | `immich-start` | Start containers (auto-mounts `/mnt/hdd`) |
 | `immich-stop` | Stop containers (daemon stays running) |
@@ -479,10 +483,34 @@ Then open `http://<ip>:2283` to complete first-run setup.
 | `immich-backup` / `immich-restore` | Dump/restore the database to/from `~/immich/backups/` |
 | `immich-sync DEST=DIR` | Sync all albums to an external drive, organized by album name |
 | `immich-ip` | Print the Immich access URL |
+| `immich-hdd-undo` / `immich-ssd-undo` | Restore all files deleted from the HDD/SSD Samba share recycle bins |
+| `immich-hdd-backup` / `immich-ssd-backup` | Rotating snapshot backup of `/mnt/hdd` → `/mnt/ssd/backups/hdd` (and vice-versa) |
 
 Run `make -C ~/dotfiles help` for the full list of targets.
 
 > **Troubleshooting random unmounts:** The HDD is a USB drive (`My Passport`, UUID `7B6D-F242`, exFAT) mounted via `/etc/fstab` with `nofail`. When it drops off the USB bus (check with `sudo dmesg | grep -i usb`), the kernel may leave a **stale mount** at `/mnt/hdd` pointing to a dead device node — `ls /mnt/hdd/` then reports `Input/output error` even though `mountpoint` says mounted. `make immich-hdd-mount` detects this (the mount source no longer matches the live USB device) and remounts. Repeated `USB disconnect` lines in `dmesg` usually indicate a flaky cable, an under-powered USB port, or the enclosure's power management — try a different port/cable and a powered hub.
+
+### Samba Shares
+
+[`scripts/init-setup-samba`](scripts/init-setup-samba) configures three Samba shares: the user's home share plus `hdd` (`/mnt/hdd`) and `ssd` (`/mnt/ssd`), accessible from the iPad via `smb://<ip>/hdd` and `smb://<ip>/ssd`. All shares use the `recycle` VFS module with `keeptree`, so deleted files land in a `.recycle` bin (`.recycle/<user>` for the home share) instead of being permanently removed, plus `fruit`/`streams_xattr` for macOS/iPadOS compatibility (`ea support = yes`, `fruit:aapl = yes`).
+
+**Restoring deleted files:**
+
+```bash
+make -C ~/dotfiles immich-hdd-undo   # restore files from /mnt/hdd/.recycle
+make -C ~/dotfiles immich-ssd-undo   # restore files from /mnt/ssd/.recycle
+```
+
+These call [`scripts/samba-recycle-restore.sh`](scripts/samba-recycle-restore.sh), which snapshots the recycle bin to `<share>/.recycle-backups/<timestamp>` (so the undo itself is reversible), then moves every deleted item back to its original location. Items whose original path still exists are kept in the recycle bin.
+
+**Rotating snapshot backups** (mirror each drive to the other, with hardlink deduplication and pruning of old snapshots via `KEEP=5` by default):
+
+```bash
+make -C ~/dotfiles immich-hdd-backup   # /mnt/hdd -> /mnt/ssd/backups/hdd
+make -C ~/dotfiles immich-ssd-backup   # /mnt/ssd -> /mnt/hdd/backups/ssd
+```
+
+Both call [`scripts/backup-drive.sh`](scripts/backup-drive.sh), which creates `YYYYMMDD-HHMMSS` snapshots and keeps the newest `KEEP` (default 5).
 
 ### Exposing OpenCode on the Tailnet
 
@@ -520,7 +548,9 @@ curl -d 'Summarize the last 3 git commits' http://localhost:8080
 | `make -C ~/dotfiles immich-setup` | First-time Immich setup (start daemon, link library, pull, start) |
 | `bash ~/dotfiles/scripts/setup-immich.sh` | Bootstrap Docker daemon and start Immich (Debian) |
 | `make -C ~/dotfiles immich-sync DEST=DIR` | Sync Immich albums to an external drive |
-| `make -C ~/dotfiles immich-hdd-mount` | Remount `/mnt/hdd` (auto-recovers stale mounts) |
+| `make -C ~/dotfiles immich-hdd-mount` | Remount `/mnt/hdd` (auto-recovers stale/read-only mounts) |
+| `make -C ~/dotfiles immich-hdd-undo` / `immich-ssd-undo` | Restore Samba recycle-bin deletes on `/mnt/hdd` / `/mnt/ssd` |
+| `make -C ~/dotfiles immich-hdd-backup` / `immich-ssd-backup` | Rotating snapshot backup of `/mnt/hdd` ↔ `/mnt/ssd` |
 | `home-manager expire-generations 30d` | Garbage collect old Home Manager generations |
 
 ## Acknowledgements

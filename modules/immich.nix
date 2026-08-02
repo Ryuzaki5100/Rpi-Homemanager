@@ -11,6 +11,8 @@
         volumes:
           - ''${UPLOAD_LOCATION}:/data
           - /etc/localtime:/etc/localtime:ro
+        devices:
+          - /dev/video19:/dev/video19
         env_file:
           - .env
         ports:
@@ -21,6 +23,11 @@
         restart: "no"
         healthcheck:
           disable: false
+          test: ["CMD-SHELL", "curl -f http://localhost:2283/api/server/ping || exit 1"]
+          interval: 60s
+          timeout: 10s
+          retries: 5
+          start_period: 120s
 
       immich-machine-learning:
         container_name: immich_machine_learning
@@ -32,6 +39,10 @@
         restart: "no"
         healthcheck:
           disable: false
+          interval: 60s
+          timeout: 10s
+          retries: 5
+          start_period: 120s
 
       redis:
         container_name: immich_redis
@@ -74,6 +85,9 @@
     # Immich version (pin to specific version if needed)
     IMMICH_VERSION=v3
 
+    # Hardware acceleration (Pi 5 V4L2 HEVC decoder)
+    IMMICH_HW_ACCEL_ENABLED=true
+
     # Postgres password (local auth only, not exposed)
     DB_PASSWORD=immichpostgres
 
@@ -84,5 +98,8 @@
 
   home.activation.createImmichDirs = ''
     mkdir -p ~/immich/postgres
+    for dir in profile thumbs upload library backups encoded-video; do
+      touch ~/immich/library/$dir/.immich 2>/dev/null || true
+    done
   '';
 }

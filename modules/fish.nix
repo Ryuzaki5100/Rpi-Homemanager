@@ -25,6 +25,7 @@
       edot = "cd ~/dotfiles && nixvim";
       dot = "cd ~/dotfiles";
       ga = "git add .";
+      op = "opencode";
     };
 
     functions = {

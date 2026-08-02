@@ -30,6 +30,8 @@ in
     nitch
     btop
     clock-rs
+    smartmontools
+    exfatprogs
 
     # Media & graphics
     chafa

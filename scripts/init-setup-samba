@@ -57,6 +57,9 @@ ntlm auth = yes
 raw NTLMv2 auth = yes
 min protocol = SMB2
 max protocol = SMB3
+ea support = yes
+fruit:aapl = yes
+fruit:nfs_aces = no
 
 [$username]
 comment = $username's shared files
@@ -67,12 +70,49 @@ valid users = $username
 create mask = 0644
 directory mask = 0755
 force user = $username
-vfs objects = fruit recycle
-fruit:aapl = yes
-fruit:metadata = stream
+vfs objects = recycle fruit streams_xattr
+fruit:metadata = netatalk
 fruit:model = RPi5
 fruit:advertise_fullsync = true
 recycle:repository = .recycle/%U
+recycle:keeptree = yes
+recycle:touch = yes
+recycle:versions = yes
+recycle:maxsize = 0
+
+[hdd]
+comment = $username's HDD share
+path = /mnt/hdd
+browseable = yes
+read only = no
+valid users = $username
+create mask = 0644
+directory mask = 0755
+force user = $username
+vfs objects = recycle fruit streams_xattr
+fruit:metadata = netatalk
+fruit:model = RPi5
+fruit:advertise_fullsync = true
+recycle:repository = .recycle
+recycle:keeptree = yes
+recycle:touch = yes
+recycle:versions = yes
+recycle:maxsize = 0
+
+[ssd]
+comment = $username's SSD share
+path = /mnt/ssd
+browseable = yes
+read only = no
+valid users = $username
+create mask = 0644
+directory mask = 0755
+force user = $username
+vfs objects = recycle fruit streams_xattr
+fruit:metadata = netatalk
+fruit:model = RPi5
+fruit:advertise_fullsync = true
+recycle:repository = .recycle
 recycle:keeptree = yes
 recycle:touch = yes
 recycle:versions = yes
@@ -100,3 +140,5 @@ sudo systemctl enable --now smbd
 ipaddr=$(hostname -I | awk '{print $1}')
 echo "=== Samba setup complete! ==="
 echo "Connect from iPad via: smb://$ipaddr/$username"
+echo "Also available: smb://$ipaddr/hdd and smb://$ipaddr/ssd"
+echo "Restore deleted files with: make immich-hdd-undo / immich-ssd-undo"
