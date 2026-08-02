@@ -31,7 +31,7 @@ help:
 	@echo "  immich-db-shell         - Open a psql shell in the database"
 	@echo ""
 	@echo "HDD:"
-	@echo "  immich-hdd-mount        - Mount /mnt/hdd (auto-recovers stale mounts)"
+	@echo "  immich-hdd-mount        - Mount /mnt/hdd rw (moves auto-mounted drives, recovers stale/RO mounts)"
 	@echo "  immich-hdd-unmount      - Safely unmount /mnt/hdd"
 	@echo "  immich-hdd-status       - Show mount status and disk info"
 	@echo ""
@@ -66,24 +66,32 @@ immich-hdd-mount:
 		echo "  Diagnostics: sudo dmesg | grep -i usb"; \
 		exit 1; \
 	fi; \
+	MP=$$(lsblk -no MOUNTPOINT "$$CUR" 2>/dev/null | head -1); \
 	SRC=$$(findmnt -no SOURCE /mnt/hdd 2>/dev/null || true); \
+	if [ -n "$$MP" ] && [ "$$MP" != "/mnt/hdd" ]; then \
+		echo "==> Drive mounted at $$MP; moving to /mnt/hdd..."; \
+		sudo umount "$$MP" 2>/dev/null || sudo umount -l "$$MP" 2>/dev/null || true; \
+	fi; \
+	if [ -n "$$SRC" ] && [ "$$SRC" != "$$CUR" ]; then \
+		echo "==> Stale mount at /mnt/hdd ($$SRC); clearing..."; \
+		sudo umount /mnt/hdd 2>/dev/null || sudo umount -l /mnt/hdd 2>/dev/null || true; \
+	fi; \
 	OPTS=$$(findmnt -no OPTIONS /mnt/hdd 2>/dev/null || true); \
-	if [ -n "$$SRC" ] && echo "$$OPTS" | grep -q "ro,"; then \
-		echo "==> /mnt/hdd is read-only (I/O errors); remounting..."; \
-		sudo umount -l /mnt/hdd 2>/dev/null; \
-		sudo mount /mnt/hdd; \
-		echo "==> Mounted /mnt/hdd (rw)"; \
-	elif [ -n "$$SRC" ] && [ "$$SRC" = "$$CUR" ]; then \
-		echo "==> /mnt/hdd already mounted ($$SRC)"; \
-	elif [ -n "$$SRC" ]; then \
-		echo "==> Stale mount detected ($$SRC -> $$CUR); remounting..."; \
-		sudo umount /mnt/hdd 2>/dev/null || sudo umount -l /mnt/hdd; \
-		sudo mount /mnt/hdd; \
-		echo "==> Mounted /mnt/hdd"; \
+	if echo "$$OPTS" | grep -qE '(^|,)ro(,|$$)'; then \
+		echo "==> /mnt/hdd is read-only; remounting rw in place..."; \
+		sudo mount -o remount,rw /mnt/hdd || { echo "ERROR: could not remount /mnt/hdd rw"; exit 1; }; \
+	elif [ -n "$$OPTS" ]; then \
+		echo "==> /mnt/hdd already mounted rw"; \
 	else \
-		sudo mount /mnt/hdd; \
-		echo "==> Mounted /mnt/hdd"; \
-	fi
+		sudo mount /mnt/hdd || { echo "ERROR: could not mount /mnt/hdd (see: sudo dmesg | tail -20)"; exit 1; }; \
+	fi; \
+	OPTS=$$(findmnt -no OPTIONS /mnt/hdd 2>/dev/null || true); \
+	if echo "$$OPTS" | grep -qE '(^|,)ro(,|$$)'; then \
+		echo "ERROR: /mnt/hdd ended up read-only (drive likely has I/O errors)."; \
+		echo "  Check: sudo dmesg | grep -i -E 'usb|sda|exfat'"; \
+		exit 1; \
+	fi; \
+	echo "==> /mnt/hdd mounted rw"
 
 immich-hdd-unmount:
 	@if mountpoint -q /mnt/hdd; then \

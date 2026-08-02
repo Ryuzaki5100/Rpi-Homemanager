@@ -44,13 +44,14 @@ flake.nix  ──►  home.nix  ──►  modules/*.nix
                       │
                       └── skills/
                             ├── skill-creator/SKILL.md
-                            └── update-docs/SKILL.md
+                            ├── update-docs/SKILL.md
+                            └── yt-summarizer/SKILL.md
 ```
 
 | Layer | Description |
 |---|---|
 | **`flake.nix`** | Entry point. Pins `nixpkgs` (nixos-unstable) and `home-manager`. Builds custom packages and passes them as `extraSpecialArgs` into the module tree. |
-| **`home.nix`** | Thin shim; imports all eight modules under `modules/`. Receives custom packages as extra arguments. |
+| **`home.nix`** | Thin shim; imports all eight modules under `modules/`. Receives custom packages as extra arguments. On activation, symlinks `/mnt/hdd` to `~/hdd`. |
 | **`modules/`** | Self-contained Nix files, each responsible for one concern. |
 | **`pkgs/`** | Custom package derivations exported both as flake outputs and installed in the Home Manager profile. |
 | **`skills/`** | OpenCode skill definitions (SKILL.md files) deployed via `xdg.configFile` symlinks. |
@@ -97,6 +98,7 @@ dotfiles/
 │   ├── gmail-mcp-auth.py      # Headless OAuth helper for Gmail MCP
 │   ├── init-home-manager.sh   # Bootstrap Home Manager on a fresh system
 │   ├── install-nix.sh         # Install Nix with --daemon on a fresh system
+│   ├── init-setup-hdd.sh     # Stop desktop auto-mount of the HDD; udev rule for /mnt/hdd
 │   ├── init-setup-samba       # Samba setup (home, hdd, and ssd shares + recycle bin)
 │   ├── opencode-gateway.py    # HTTP gateway proxy to opencode serve
 │   ├── opencode-serve.sh      # Launch opencode serve and expose on tailnet
@@ -110,7 +112,8 @@ dotfiles/
 │   └── sync-to-ssd.sh         # Sync Immich albums to an external drive
 └── skills/
     ├── skill-creator/     # OpenCode skill: interactive skill creation wizard
-    └── update-docs/       # OpenCode skill: auto-update docs from git changes
+    ├── update-docs/       # OpenCode skill: auto-update docs from git changes
+    └── yt-summarizer/     # OpenCode skill: summarize YouTube videos from transcripts
 ```
 
 ## Modules
@@ -472,7 +475,7 @@ Then open `http://<ip>:2283` to complete first-run setup.
 | Command | Description |
 |---|---|
 | `immich-hdd-status` | Show whether `/mnt/hdd` is mounted and list USB disk info |
-| `immich-hdd-mount` | Mount `/mnt/hdd` (by UUID); auto-recovers stale mounts and read-only mounts (I/O errors) when the drive reconnects |
+| `immich-hdd-mount` | Mount `/mnt/hdd` read-write (by UUID); moves auto-mounted drives, recovers stale and read-only mounts, and fails loudly if the mount is not rw |
 | `immich-hdd-unmount` | Safely unmount `/mnt/hdd` |
 | `immich-start` | Start containers (auto-mounts `/mnt/hdd`) |
 | `immich-stop` | Stop containers (daemon stays running) |
@@ -490,9 +493,13 @@ Run `make -C ~/dotfiles help` for the full list of targets.
 
 > **Troubleshooting random unmounts:** The HDD is a USB drive (`My Passport`, UUID `7B6D-F242`, exFAT) mounted via `/etc/fstab` with `nofail`. When it drops off the USB bus (check with `sudo dmesg | grep -i usb`), the kernel may leave a **stale mount** at `/mnt/hdd` pointing to a dead device node — `ls /mnt/hdd/` then reports `Input/output error` even though `mountpoint` says mounted. `make immich-hdd-mount` detects this (the mount source no longer matches the live USB device) and remounts. Repeated `USB disconnect` lines in `dmesg` usually indicate a flaky cable, an under-powered USB port, or the enclosure's power management — try a different port/cable and a powered hub.
 
+> **Troubleshooting "already mounted or mount point busy":** If `make immich-hdd-mount` fails with `mount: /dev/sda1 already mounted or mount point busy` plus `sda1: Can't mount, would change RO state`, the drive was auto-mounted elsewhere by the desktop session (udisks2/gvfs, usually under `/media/<user>/My Passport`) — often read-only after I/O errors. Run the one-time bootstrap to stop that auto-mount: `bash ~/dotfiles/scripts/init-setup-hdd.sh`, then re-plug the drive and run `make immich-hdd-mount` again. The target now also detects the other mountpoint and moves the drive to `/mnt/hdd`, and remounts a read-only `/mnt/hdd` rw *in place* without churning the mountpoint.
+
+> **Auto-mounting on re-insert:** The udev rule installed by [`scripts/init-setup-hdd.sh`](scripts/init-setup-hdd.sh) also runs `systemctl --no-block restart mnt-hdd.mount` whenever the drive appears, so it re-mounts at `/mnt/hdd` (rw, owned by `ryuzaki`) on its own after an unplug/replug or USB drop — no manual step needed, and it's reachable over sftp. If a stale mount ever survives an abrupt unplug, the `restart` clears it. `make immich-hdd-mount` still works as a manual fallback.
+
 ### Samba Shares
 
-[`scripts/init-setup-samba`](scripts/init-setup-samba) configures three Samba shares: the user's home share plus `hdd` (`/mnt/hdd`) and `ssd` (`/mnt/ssd`), accessible from the iPad via `smb://<ip>/hdd` and `smb://<ip>/ssd`. All shares use the `recycle` VFS module with `keeptree`, so deleted files land in a `.recycle` bin (`.recycle/<user>` for the home share) instead of being permanently removed, plus `fruit`/`streams_xattr` for macOS/iPadOS compatibility (`ea support = yes`, `fruit:aapl = yes`).
+[`scripts/init-setup-samba`](scripts/init-setup-samba) configures three Samba shares: the user's home share plus `hdd` (`/mnt/hdd`) and `ssd` (`/mnt/ssd`), accessible from the iPad via `smb://<ip>/hdd` and `smb://<ip>/ssd`. All shares use the `recycle` VFS module with `keeptree`, so deleted files land in a `.recycle` bin (`.recycle/<user>` for the home share) instead of being permanently removed. The `fruit`/`streams_xattr` modules for macOS/iPadOS compatibility (`ea support = yes`, `fruit:aapl = yes`) are only enabled where the backing filesystem supports extended attributes (the home share always; the `hdd`/`ssd` shares only on xattr-capable filesystems such as ext4 — skipped on exFAT/FAT32, where they'd break Apple-client directory listing).
 
 **Restoring deleted files:**
 
@@ -547,8 +554,9 @@ curl -d 'Summarize the last 3 git commits' http://localhost:8080
 | `bash ~/dotfiles/scripts/opencode-serve.sh` | Expose OpenCode on the tailnet |
 | `make -C ~/dotfiles immich-setup` | First-time Immich setup (start daemon, link library, pull, start) |
 | `bash ~/dotfiles/scripts/setup-immich.sh` | Bootstrap Docker daemon and start Immich (Debian) |
+| `bash ~/dotfiles/scripts/init-setup-hdd.sh` | Stop desktop auto-mount of the Immich HDD + auto-mount it at `/mnt/hdd` on re-insert (one-time) |
 | `make -C ~/dotfiles immich-sync DEST=DIR` | Sync Immich albums to an external drive |
-| `make -C ~/dotfiles immich-hdd-mount` | Remount `/mnt/hdd` (auto-recovers stale/read-only mounts) |
+| `make -C ~/dotfiles immich-hdd-mount` | Mount `/mnt/hdd` rw (moves auto-mounted drives, recovers stale/read-only mounts) |
 | `make -C ~/dotfiles immich-hdd-undo` / `immich-ssd-undo` | Restore Samba recycle-bin deletes on `/mnt/hdd` / `/mnt/ssd` |
 | `make -C ~/dotfiles immich-hdd-backup` / `immich-ssd-backup` | Rotating snapshot backup of `/mnt/hdd` ↔ `/mnt/ssd` |
 | `home-manager expire-generations 30d` | Garbage collect old Home Manager generations |

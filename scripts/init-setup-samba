@@ -35,6 +35,23 @@ for attempt in 1 2 3; do
     fi
 done
 
+# fruit/streams_xattr require extended-attribute (xattr) support on the
+# backing filesystem. exFAT/FAT32 (common on external drives) have none, and
+# running those modules there breaks Apple-client directory listing (folders
+# show up empty). Detect and only enable them where they can work. A path that
+# is not currently a mounted filesystem is treated as unsupported.
+fs_supports_xattr() {
+    local path="$1" fstype
+    if command -v findmnt >/dev/null 2>&1 && [ -z "$(findmnt -n "$path" 2>/dev/null)" ]; then
+        return 1
+    fi
+    fstype="$(stat -f -c '%T' "$path" 2>/dev/null)"
+    case "$fstype" in
+        ext*|btrfs|xfs|jfs|f2fs|zfs|ntfs3) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
 echo "Writing $SMB_CONF..."
 sudo tee "$SMB_CONF" > /dev/null <<SMBCONF
 [global]
@@ -60,6 +77,10 @@ max protocol = SMB3
 ea support = yes
 fruit:aapl = yes
 fruit:nfs_aces = no
+SMBCONF
+
+# Home share lives on the root filesystem, always xattr-capable.
+sudo tee -a "$SMB_CONF" > /dev/null <<SMBCONF
 
 [$username]
 comment = $username's shared files
@@ -79,45 +100,41 @@ recycle:keeptree = yes
 recycle:touch = yes
 recycle:versions = yes
 recycle:maxsize = 0
-
-[hdd]
-comment = $username's HDD share
-path = /mnt/hdd
-browseable = yes
-read only = no
-valid users = $username
-create mask = 0644
-directory mask = 0755
-force user = $username
-vfs objects = recycle fruit streams_xattr
-fruit:metadata = netatalk
-fruit:model = RPi5
-fruit:advertise_fullsync = true
-recycle:repository = .recycle
-recycle:keeptree = yes
-recycle:touch = yes
-recycle:versions = yes
-recycle:maxsize = 0
-
-[ssd]
-comment = $username's SSD share
-path = /mnt/ssd
-browseable = yes
-read only = no
-valid users = $username
-create mask = 0644
-directory mask = 0755
-force user = $username
-vfs objects = recycle fruit streams_xattr
-fruit:metadata = netatalk
-fruit:model = RPi5
-fruit:advertise_fullsync = true
-recycle:repository = .recycle
-recycle:keeptree = yes
-recycle:touch = yes
-recycle:versions = yes
-recycle:maxsize = 0
 SMBCONF
+
+emit_share() {
+    local name="$1" path="$2" repo="$3" comment="$4"
+    local vfs="vfs objects = recycle"
+    local extra="hide dot files = yes"
+    if fs_supports_xattr "$path"; then
+        vfs="vfs objects = recycle fruit streams_xattr"
+        extra="fruit:metadata = netatalk
+fruit:model = RPi5
+fruit:advertise_fullsync = true"
+    fi
+    sudo tee -a "$SMB_CONF" > /dev/null <<EOF
+
+[$name]
+comment = $comment
+path = $path
+browseable = yes
+read only = no
+valid users = $username
+create mask = 0644
+directory mask = 0755
+force user = $username
+$vfs
+$extra
+recycle:repository = $repo
+recycle:keeptree = yes
+recycle:touch = yes
+recycle:versions = yes
+recycle:maxsize = 0
+EOF
+}
+
+emit_share "hdd" "/mnt/hdd" ".recycle" "$username's HDD share"
+emit_share "ssd" "/mnt/ssd" ".recycle" "$username's SSD share"
 
 if ! command -v expect &>/dev/null; then
     sudo apt-get install -y -qq expect

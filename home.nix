@@ -23,6 +23,10 @@
     ];
   };
 
+  home.activation.createMountLinks = ''
+    ln -sfn /mnt/hdd ~/hdd
+  '';
+
   xdg.configFile."mangal/mangal.toml".text = ''
     [downloader]
     path = "/home/ryuzaki/manga"
