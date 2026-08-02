@@ -1,11 +1,11 @@
 ---
 name: yt-summarizer
-description: Use when the user provides a YouTube video link (youtube.com or youtu.be) and wants a well-structured summary of the video content. Fetches the video transcript and produces a structured summary.
+description: Use when the user provides a YouTube video link (youtube.com or youtu.be) and wants a well-structured summary of the video content. Fetches the video transcript, produces a structured summary, and offers to export it as a markdown or EPUB file (or print it only).
 ---
 
 # yt-summarizer
 
-Generate a well-structured summary of a YouTube video from its transcript.
+Generate a well-structured summary of a YouTube video from its transcript, then ask the user how they want it delivered: printed, saved as a markdown file, or exported as an EPUB with well-organized chapters/sections.
 
 ## Steps
 
@@ -39,11 +39,34 @@ Generate a well-structured summary of a YouTube video from its transcript.
    - Keep the summary faithful to the content — do not invent details not present in the transcript.
    - Use a numbered list if the video presents ranked/step-by-step content.
 
-4. **Verify**
+4. **Ask for the output format**
+   - After producing the summary, ask the user which output they want:
+     - **Print only** — output the summary in the chat, write no file
+     - **Markdown file** — save the summary as a `.md` file
+     - **EPUB file** — export the summary as an `.epub` with chapters/sections organized to match the video's content flow
+   - If the user has already stated a preference, skip the prompt and honor it.
+
+5. **Export the summary**
+   - **Markdown:** write the summary to `~/yt-summaries/<sanitized-video-title>.md` (or a path the user specifies), creating the directory if needed. Sanitize the title to lowercase kebab-case (letters, digits, hyphens).
+   - **EPUB:** first write the markdown (as above), then convert with `pandoc` (already available on the system):
+     ```
+     pandoc ~/yt-summaries/<sanitized-video-title>.md -o ~/yt-summaries/<sanitized-video-title>.epub \
+       --metadata title="<Video title>" \
+       --metadata author="yt-summarizer" \
+       --toc --toc-depth=2
+     ```
+     - The summary's `###` section headings become the EPUB's chapters/table of contents, so keep them meaningful and mirroring the video's flow.
+     - If the video has clearly distinct parts (e.g. tutorial chapters, interviews, talks), group related sections under top-level chapter headings so the EPUB reads like a book.
+     - Confirm the `.epub` was created and report its path to the user.
+   - For **print only**, just output the summary in the chat.
+
+6. **Verify**
    - Ensure the summary covers the video's main arguments/topics, not just the intro.
    - If the user asked a specific question about the video, answer that question directly first, then provide the full summary.
+   - If exporting to a file, confirm the file exists and, for EPUB, that `pandoc` ran successfully.
 
 ## Notes
 
 - You cannot watch the video — you summarize only from the transcript and any fetched metadata.
-- If captions are unavailable, say so and provide whatever metadata you could retrieve.
+- If captions are unavailable, say so and provide whatever metadata you could retrieve; the output options still apply, but the exported content will be limited.
+- `pandoc` handles EPUB export — no extra packages are required.

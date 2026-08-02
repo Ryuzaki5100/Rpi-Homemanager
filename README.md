@@ -20,6 +20,7 @@ Personal Home Manager configuration for a terminal-centric workflow on `aarch64-
   - [gmail-mcp.nix](#gmail-mcpnix)
   - [immich.nix](#immichnix)
   - [obsidian.nix](#obsidiannix)
+- [Skills](#skills)
 - [Custom Packages](#custom-packages)
   - [nixvim-editor](#nixvim-editor)
   - [gmail-mcp-auth](#gmail-mcp-auth)
@@ -113,7 +114,7 @@ dotfiles/
 └── skills/
     ├── skill-creator/     # OpenCode skill: interactive skill creation wizard
     ├── update-docs/       # OpenCode skill: auto-update docs from git changes
-    └── yt-summarizer/     # OpenCode skill: summarize YouTube videos from transcripts
+    └── yt-summarizer/     # OpenCode skill: summarize YouTube videos, export to markdown/EPUB
 ```
 
 ## Modules
@@ -197,6 +198,8 @@ Declarative package list installed via `home.packages`. Grouped by category:
 | Obsidian TUIs | `basalt`, `obsitui`, `nixvim-editor` |
 | Fun | `cmatrix`, `posting` |
 
+> **Note:** `pandoc` doubles as the EPUB converter for the [`yt-summarizer`](#yt-summarizer) skill.
+
 > **Note:** `wifitui` requires your user to be in the `netdev` group and a polkit rule allowing NetworkManager actions. On Debian systems, run:
 >
 > ```bash
@@ -262,6 +265,30 @@ Sets up the Obsidian vault ecosystem for terminal-based note-taking.
   - Custom keybindings:
     - **Ctrl+E** — open current note in Nixvim
     - **Ctrl+Alt+E** — spawn Nixvim in a new terminal window for the current note
+
+## Skills
+
+OpenCode skills are stored in `skills/` and auto-deployed to `~/.config/opencode/skills/<name>/` by the [`opencode.nix`](#opencodenix) module (any subdirectory with a `SKILL.md` is symlinked automatically).
+
+### skill-creator
+
+Interactive wizard for creating new OpenCode skills — guides the agent through naming, scoping, and writing a `SKILL.md` in `skills/<name>/`.
+
+### update-docs
+
+Analyzes git changes (working tree diff + recent commits) to find and update stale documentation. Operates conservatively — only touching sections affected by real changes, never rewriting unrelated content.
+
+### yt-summarizer
+
+Generates a well-structured summary of a YouTube video from its transcript (fetched via `youtube-transcript-api`, with a fallback to page metadata when captions are unavailable).
+
+After producing the summary, the skill asks how you'd like it delivered:
+
+| Output | Behavior |
+|---|---|
+| **Print only** | Summary is output in the chat; no file is written |
+| **Markdown** | Saves the summary to `~/yt-summaries/<video-title>.md` |
+| **EPUB** | Converts the summary with `pandoc` (already in `home.packages`) into an `.epub` with a table of contents — the summary's section headings become chapters, organized to mirror the video's content flow |
 
 ## Custom Packages
 
