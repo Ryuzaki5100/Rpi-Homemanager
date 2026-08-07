@@ -52,7 +52,7 @@ flake.nix  ──►  home.nix  ──►  modules/*.nix
 | Layer | Description |
 |---|---|
 | **`flake.nix`** | Entry point. Pins `nixpkgs` (nixos-unstable) and `home-manager`. Builds custom packages and passes them as `extraSpecialArgs` into the module tree. |
-| **`home.nix`** | Thin shim; imports all eight modules under `modules/`. Receives custom packages as extra arguments. On activation, symlinks `/mnt/hdd` to `~/hdd`. |
+| **`home.nix`** | Thin shim; imports all nine modules under `modules/`. Receives custom packages as extra arguments. On activation, symlinks `/mnt/hdd` to `~/hdd`. |
 | **`modules/`** | Self-contained Nix files, each responsible for one concern. |
 | **`pkgs/`** | Custom package derivations exported both as flake outputs and installed in the Home Manager profile. |
 | **`skills/`** | OpenCode skill definitions (SKILL.md files) deployed via `xdg.configFile` symlinks. |
@@ -84,6 +84,7 @@ dotfiles/
 ├── modules/
 │   ├── core.nix           # User identity & state version
 │   ├── env.nix            # Session environment variables
+│   ├── filebrowser.nix    # Filebrowser web file manager (systemd user service)
 │   ├── fish.nix           # Fish shell config & aliases
 │   ├── gmail-mcp.nix      # Gmail MCP auth packages
 │   ├── immich.nix         # Immich docker-compose config & env
@@ -95,8 +96,10 @@ dotfiles/
 │   ├── nixvim-editor.nix  # Thin wrapper around external Nixvim flake
 │   └── obsitui.nix        # Obsidian TUI from source (npm)
 ├── scripts/
+│   ├── add-subtitles.sh        # Embed an .srt into a video as a soft subtitle track
 │   ├── backup-drive.sh        # Rotating hardlink snapshot backup of a mount
 │   ├── gmail-mcp-auth.py      # Headless OAuth helper for Gmail MCP
+│   ├── init-filebrowser.sh    # One-shot reproducible Filebrowser setup (interactive password)
 │   ├── init-home-manager.sh   # Bootstrap Home Manager on a fresh system
 │   ├── install-nix.sh         # Install Nix with --daemon on a fresh system
 │   ├── init-setup-hdd.sh     # Stop desktop auto-mount of the HDD; udev rule for /mnt/hdd
@@ -252,6 +255,29 @@ Deploys [Immich](https://immich.app) — a self-hosted photo and video managemen
 - `~/immich/postgres` — database data (must stay on local disk, not a network mount)
 
 **Note:** All services use `restart: "no"` — containers are started and stopped explicitly via the Makefile targets, not auto-restarted on boot.
+
+### filebrowser.nix
+
+Runs [Filebrowser](https://filebrowser.org) — a web-based file manager — as a `systemd` **user service** so files on the RPi (e.g. `~/Movies`) can be uploaded/downloaded from the iPad via a browser.
+
+**What it does:**
+- Installs `filebrowser` and declares a `systemd.user.services.filebrowser` unit bound to `default.target` with `Restart=on-failure`
+- Serves `--root` (default `~`) on `--address 0.0.0.0:8080`
+- On first start (`ExecStartPre`), bootstraps the Bolt DB with the configured admin user, a minimum password length of 8, and a TUS chunk size that avoids Safari freezing after the first chunk
+
+**Options** (`services.filebrowser.*`, see `modules/filebrowser.nix`):
+
+| Option | Default | Description |
+|---|---|---|
+| `enable` | `false` | Turn the module on |
+| `root` | `~` | Directory Filebrowser serves |
+| `port` | `8080` | Listen port |
+| `address` | `0.0.0.0` | Listen address |
+| `username` | `admin` | Initial admin username |
+| `password` | `changeme` (example) | Initial admin password (plaintext; Filebrowser hashes it). Override with your own value — the real password is never stored in this repo. |
+| `tusChunkSize` | `2147483648` (2 GiB) | TUS chunk size; workaround for [filebrowser#5987](https://github.com/filebrowser/filebrowser/issues/5987) — Safari freezes after the first chunk with the default 10 MiB, so it's sized above any expected upload |
+
+> **Note:** The database is only re-initialized if it doesn't exist. To apply a change to `tusChunkSize` or the initial `password` on an existing install, delete `~/.config/filebrowser/filebrowser.db` and re-run `home-manager switch` (or use `scripts/init-filebrowser.sh`, which sets both every run).
 
 ### obsidian.nix
 
@@ -525,6 +551,27 @@ Run `make -C ~/dotfiles help` for the full list of targets.
 
 > **Auto-mounting on re-insert:** The udev rule installed by [`scripts/init-setup-hdd.sh`](scripts/init-setup-hdd.sh) also runs `systemctl --no-block restart mnt-hdd.mount` whenever the drive appears, so it re-mounts at `/mnt/hdd` (rw, owned by `ryuzaki`) on its own after an unplug/replug or USB drop — no manual step needed, and it's reachable over sftp. If a stale mount ever survives an abrupt unplug, the `restart` clears it. `make immich-hdd-mount` still works as a manual fallback.
 
+### Filebrowser Setup
+
+[`scripts/init-filebrowser.sh`](scripts/init-filebrowser.sh) is the one-shot, reproducible way to bring up Filebrowser on the RPi. It is idempotent and safe to re-run:
+
+```bash
+bash ~/dotfiles/scripts/init-filebrowser.sh
+```
+
+It will:
+1. Enable Nix flakes and apply the Home Manager flake (installing `filebrowser` + the systemd unit)
+2. **Prompt interactively for the admin password** (hidden input, confirmed, min 8 chars) — unless `FILEBROWSER_PASSWORD` is already set in the environment
+3. Ensure the Bolt DB exists, set the minimum password length to 8 and the TUS chunk size (default 2 GiB, override with `FILEBROWSER_TUS_CHUNK_SIZE`), then create-or-update the admin user
+4. Enable **linger** (`sudo loginctl enable-linger`) so the user service starts at boot even without a desktop/SSH login session
+5. Start + enable the service and print the local and network access URLs
+
+Access from the iPad: `http://<rpi-ip>:8080`.
+
+**Environment overrides:** `FILEBROWSER_PASSWORD`, `FILEBROWSER_USERNAME` (default `admin`), `FILEBROWSER_TUS_CHUNK_SIZE` (default `2147483648`).
+
+> **Note on boot persistence:** Home Manager fully manages the user-level unit (install, enable, restart on switch). The one thing it *cannot* do is enable **linger** — that's a root-level operation (`/var/lib/systemd/linger`), which is why the script performs it with `sudo`. Without linger, the service only starts once a desktop login session exists.
+
 ### Samba Shares
 
 [`scripts/init-setup-samba`](scripts/init-setup-samba) configures three Samba shares: the user's home share plus `hdd` (`/mnt/hdd`) and `ssd` (`/mnt/ssd`), accessible from the iPad via `smb://<ip>/hdd` and `smb://<ip>/ssd`. All shares use the `recycle` VFS module with `keeptree`, so deleted files land in a `.recycle` bin (`.recycle/<user>` for the home share) instead of being permanently removed. The `fruit`/`streams_xattr` modules for macOS/iPadOS compatibility (`ea support = yes`, `fruit:aapl = yes`) are only enabled where the backing filesystem supports extended attributes (the home share always; the `hdd`/`ssd` shares only on xattr-capable filesystems such as ext4 — skipped on exFAT/FAT32, where they'd break Apple-client directory listing).
@@ -583,6 +630,8 @@ curl -d 'Summarize the last 3 git commits' http://localhost:8080
 | `bash ~/dotfiles/scripts/opencode-serve.sh` | Expose OpenCode on the tailnet |
 | `make -C ~/dotfiles immich-setup` | First-time Immich setup (start daemon, link library, pull, start) |
 | `bash ~/dotfiles/scripts/setup-immich.sh` | Bootstrap Docker daemon and start Immich (Debian) |
+| `bash ~/dotfiles/scripts/init-filebrowser.sh` | One-shot reproducible Filebrowser setup (interactive password, enables boot linger) |
+| `bash ~/dotfiles/scripts/add-subtitles.sh VIDEO srt` | Embed an `.srt` into a video as a soft subtitle track (`mov_text`) |
 | `bash ~/dotfiles/scripts/init-setup-hdd.sh` | Stop desktop auto-mount of the Immich HDD + auto-mount it at `/mnt/hdd` on re-insert (one-time) |
 | `make -C ~/dotfiles immich-sync DEST=DIR` | Sync Immich albums to an external drive |
 | `make -C ~/dotfiles immich-hdd-mount` | Mount `/mnt/hdd` rw (moves auto-mounted drives, recovers stale/read-only mounts) |

@@ -14,6 +14,7 @@
     ./modules/opencode.nix
     ./modules/gmail-mcp.nix
     ./modules/immich.nix
+    ./modules/filebrowser.nix
   ];
 
   nixpkgs.config = {
@@ -26,6 +27,10 @@
   home.activation.createMountLinks = ''
     ln -sfn /mnt/hdd ~/hdd
   '';
+
+  services.filebrowser = {
+    enable = true;
+  };
 
   xdg.configFile."mangal/mangal.toml".text = ''
     [downloader]
