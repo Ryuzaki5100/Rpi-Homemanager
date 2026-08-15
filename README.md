@@ -18,6 +18,7 @@ Personal Home Manager configuration for a terminal-centric workflow on `aarch64-
   - [opencode.nix](#opencodenix)
   - [packages.nix](#packagesnix)
   - [gmail-mcp.nix](#gmail-mcpnix)
+  - [firecrawl.nix](#firecrawlnix)
   - [immich.nix](#immichnix)
   - [obsidian.nix](#obsidiannix)
 - [Skills](#skills)
@@ -27,6 +28,7 @@ Personal Home Manager configuration for a terminal-centric workflow on `aarch64-
   - [obsitui](#obsitui)
 - [Quick Start](#quick-start)
   - [Gmail MCP Setup](#gmail-mcp-setup)
+  - [Firecrawl Setup](#firecrawl-setup)
   - [Tailscale Setup](#tailscale-setup)
   - [Immich Setup](#immich-setup)
   - [Samba Shares](#samba-shares)
@@ -44,6 +46,8 @@ flake.nix  ──►  home.nix  ──►  modules/*.nix
                       │     └── gmail-mcp-auth.nix
                       │
                       └── skills/
+                            ├── batch-resume-tailor/SKILL.md
+                            ├── single-resume-tailor/SKILL.md
                             ├── skill-creator/SKILL.md
                             ├── update-docs/SKILL.md
                             └── yt-summarizer/SKILL.md
@@ -52,7 +56,7 @@ flake.nix  ──►  home.nix  ──►  modules/*.nix
 | Layer | Description |
 |---|---|
 | **`flake.nix`** | Entry point. Pins `nixpkgs` (nixos-unstable) and `home-manager`. Builds custom packages and passes them as `extraSpecialArgs` into the module tree. |
-| **`home.nix`** | Thin shim; imports all nine modules under `modules/`. Receives custom packages as extra arguments. On activation, symlinks `/mnt/hdd` to `~/hdd`. |
+| **`home.nix`** | Thin shim; imports all ten modules under `modules/`. Receives custom packages as extra arguments. On activation, symlinks `/mnt/hdd` to `~/hdd`. |
 | **`modules/`** | Self-contained Nix files, each responsible for one concern. |
 | **`pkgs/`** | Custom package derivations exported both as flake outputs and installed in the Home Manager profile. |
 | **`skills/`** | OpenCode skill definitions (SKILL.md files) deployed via `xdg.configFile` symlinks. |
@@ -84,6 +88,7 @@ dotfiles/
 ├── modules/
 │   ├── core.nix           # User identity & state version
 │   ├── env.nix            # Session environment variables
+│   ├── firecrawl.nix      # Firecrawl MCP server config
 │   ├── filebrowser.nix    # Filebrowser web file manager (systemd user service)
 │   ├── fish.nix           # Fish shell config & aliases
 │   ├── gmail-mcp.nix      # Gmail MCP auth packages
@@ -109,12 +114,15 @@ dotfiles/
 │   ├── download-vid.sh        # Download 4K video with yt-dlp and ffmpeg
 │   ├── samba-recycle-restore.sh # Restore files from a Samba recycle bin
 │   ├── setup-gmail-mcp.sh     # Interactive Gmail MCP setup wizard
+│   ├── setup-firecrawl.sh     # Save a Firecrawl API key for the MCP server
 │   ├── setup-immich.sh        # Bootstrap Docker daemon and start Immich
 │   ├── setup-rpi-usb-gadget.sh # Configure RPi as USB ethernet gadget
 │   ├── setup-tailscale.sh     # Tailscale auth, status check, and systemd enable
 │   ├── setup-wayvnc.sh        # Set up WayVNC VNC server for iPad access
 │   └── sync-to-ssd.sh         # Sync Immich albums to an external drive
 └── skills/
+    ├── batch-resume-tailor/ # OpenCode skill: batch tailor resumes from job posting URLs
+    ├── single-resume-tailor/ # OpenCode skill: ATS-optimized one-page resume from a JD
     ├── skill-creator/     # OpenCode skill: interactive skill creation wizard
     ├── update-docs/       # OpenCode skill: auto-update docs from git changes
     └── yt-summarizer/     # OpenCode skill: summarize YouTube videos, export to markdown/EPUB
@@ -180,7 +188,9 @@ Configures [OpenCode](https://opencode.ai) — an AI coding assistant — via `p
 
 **MCP server configuration:**
 - Defines a Gmail MCP server using `mcp-google-gmail` with paths to OAuth credentials and token
-- The MCP server is **disabled by default** — enable with `opencode mcp toggle gmail` or set `programs.opencode.settings.mcp.gmail.enabled = true`
+- The server is **enabled by default** — set `programs.opencode.settings.mcp.gmail.enabled = false` to disable it
+- Launches via `uv run --no-project --with "mcp-google-gmail" --with "mcp>=1.8.0,<2" mcp-google-gmail`, pinning `mcp<2` because `mcp-google-gmail` requires the `fastmcp` module that was removed in `mcp` 2.0.0
+- Defines a Firecrawl MCP server (`firecrawl-mcp`, **enabled**, keyed on `~/.config/firecrawl/api-key`) — see [`firecrawl.nix`](#firecrawlnix)
 
 **Skill deployment:**
 - Automatically discovers subdirectories under `skills/` and symlinks each `SKILL.md` into `~/.config/opencode/skills/<name>/`
@@ -239,6 +249,21 @@ git clone https://github.com/Ryuzaki5100/dotfiles ~/dotfiles
 home-manager switch --flake ~/dotfiles#ryuzaki
 # Copy credentials.json to ~/.config/gmail-mcp/credentials.json
 bash ~/dotfiles/scripts/setup-gmail-mcp.sh
+```
+
+### firecrawl.nix
+
+Configures the [Firecrawl](https://firecrawl.dev) MCP server — web search, scraping, and site crawling for OpenCode — via `programs.opencode.settings.mcp.firecrawl`.
+
+**What it does:**
+- Installs `nodejs` (needed to run `npx`)
+- Defines a `firecrawl` MCP server (**enabled by default**) running `npx -y firecrawl-mcp@3.23.8`
+- Supplies the API key from `~/.config/firecrawl/api-key` via OpenCode's `{file:...}` secret syntax
+
+**Setup on a new machine:**
+```bash
+home-manager switch --flake ~/dotfiles#ryuzaki   # installs nodejs + MCP config
+bash ~/dotfiles/scripts/setup-firecrawl.sh       # saves the API key
 ```
 
 ### immich.nix
@@ -315,6 +340,14 @@ After producing the summary, the skill asks how you'd like it delivered:
 | **Print only** | Summary is output in the chat; no file is written |
 | **Markdown** | Saves the summary to `~/yt-summaries/<video-title>.md` |
 | **EPUB** | Converts the summary with `pandoc` (already in `home.packages`) into an `.epub` with a table of contents — the summary's section headings become chapters, organized to mirror the video's content flow |
+
+### batch-resume-tailor
+
+Given a list of job posting URLs (Naukri, LinkedIn, company career pages, etc.), fetches each job description — either by the agent itself (`curl` through the `r.jina.ai` rendering proxy) or via the Firecrawl MCP server — and tailors one resume per role. Produces date-stamped `.tex` files in `~/my_resumes/<company>/` (e.g. `cisco_software_engineer_11-08-2026.tex`) and stores each fetched job description in `~/my_resumes/job_descriptions/`. Before regenerating a resume for a company+role that already has one, it summarizes the similarity and asks whether to keep or replace the existing file.
+
+### single-resume-tailor
+
+Given a single job description, curates a polished, ATS-optimized LaTeX resume from `~/my_resumes/knowledge_base.md` that fills exactly one page: keyword-mirrored bullets, a Professional Summary, a dedicated Skills block, document-wide unique action verbs, and an ATS-safe single-column layout. Saves it to `~/my_resumes/<company>/<company>_<role>.tex`.
 
 ## Custom Packages
 
@@ -399,12 +432,12 @@ The script will:
 1. Verify `uv` and `gmail-mcp-auth` are installed
 2. Create `~/.config/gmail-mcp/`
 3. If `credentials.json` is missing, prompt you to set it up
-4. If `token.json` is missing, run the OAuth flow (prints URL → you authorize → paste redirect URL)
+4. If `token.json` is missing **or expired**, run the OAuth flow (prints URL → you authorize → paste redirect URL)
 5. Verify the MCP server is connected
 
-> **Note:** The MCP server is disabled by default. After setup, enable it with
-> `opencode mcp toggle gmail`, or set `programs.opencode.settings.mcp.gmail.enabled = true`
-> in your flake configuration.
+> **Note:** The MCP server is enabled by default. If you've disabled it, set
+> `programs.opencode.settings.mcp.gmail.enabled = true`
+> in your flake configuration and run `home-manager switch`.
 
 #### Manual (step-by-step)
 
@@ -449,7 +482,7 @@ This installs `uv` and `gmail-mcp-auth`, and writes the MCP config to `~/.config
 On a machine **with a browser**, this is one command:
 
 ```bash
-uvx mcp-google-gmail@latest auth
+uv run --no-project --with "mcp-google-gmail" --with "mcp>=1.8.0,<2" mcp-google-gmail auth
 ```
 
 On a **headless SSH** machine, use the helper script:
@@ -486,6 +519,23 @@ Ask OpenCode:
 - *"Find the email from john@example.com about the project update"*
 
 </details>
+
+### Firecrawl Setup
+
+[`scripts/setup-firecrawl.sh`](scripts/setup-firecrawl.sh) saves your Firecrawl API key for the MCP server configured by [`firecrawl.nix`](#firecrawlnix):
+
+```bash
+# After home-manager switch --flake ~/dotfiles
+bash ~/dotfiles/scripts/setup-firecrawl.sh
+```
+
+The script will:
+1. Create `~/.config/firecrawl/`
+2. If `~/.config/firecrawl/api-key` already exists, prompt whether to overwrite it
+3. Prompt for a key (`fc-...`, whitespace-trimmed) and save it to `~/.config/firecrawl/api-key` with `chmod 600`
+4. Check the OpenCode config contains the Firecrawl MCP entry
+
+Get your key from <https://www.firecrawl.dev/app/api-keys>. Restart OpenCode after setup so the MCP server picks up the key.
 
 ### Tailscale Setup
 
@@ -630,6 +680,7 @@ curl -d 'Summarize the last 3 git commits' http://localhost:8080
 | `bash ~/dotfiles/scripts/opencode-serve.sh` | Expose OpenCode on the tailnet |
 | `make -C ~/dotfiles immich-setup` | First-time Immich setup (start daemon, link library, pull, start) |
 | `bash ~/dotfiles/scripts/setup-immich.sh` | Bootstrap Docker daemon and start Immich (Debian) |
+| `bash ~/dotfiles/scripts/setup-firecrawl.sh` | Save a Firecrawl API key for the MCP server (`~/.config/firecrawl/api-key`) |
 | `bash ~/dotfiles/scripts/init-filebrowser.sh` | One-shot reproducible Filebrowser setup (interactive password, enables boot linger) |
 | `bash ~/dotfiles/scripts/add-subtitles.sh VIDEO srt` | Embed an `.srt` into a video as a soft subtitle track (`mov_text`) |
 | `bash ~/dotfiles/scripts/init-setup-hdd.sh` | Stop desktop auto-mount of the Immich HDD + auto-mount it at `/mnt/hdd` on re-insert (one-time) |

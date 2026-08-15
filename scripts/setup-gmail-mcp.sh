@@ -50,9 +50,17 @@ fi
 info "credentials.json found"
 
 # Step 4: Check or run OAuth auth
+TOKEN_EXPIRED=""
 if [ -f "${TOKEN}" ]; then
-    info "token.json already exists — skipping OAuth"
-else
+    if command -v python3 &>/dev/null && python3 -c "import json,sys,datetime; d=json.load(open('${TOKEN}')); exp=datetime.datetime.fromisoformat(d.get('expiry','').replace('Z','+00:00')); sys.exit(0 if exp > datetime.datetime.now(datetime.timezone.utc) else 1)" 2>/dev/null; then
+        info "token.json already exists — skipping OAuth"
+    else
+        warn "token.json exists but is expired or invalid — re-running OAuth"
+        TOKEN_EXPIRED="1"
+    fi
+fi
+
+if [ -n "${TOKEN_EXPIRED}" ] || [ ! -f "${TOKEN}" ]; then
     echo ""
     info "Running OAuth authorization..."
     echo ""

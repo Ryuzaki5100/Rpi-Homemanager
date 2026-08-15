@@ -13,6 +13,7 @@
     ./modules/obsidian.nix
     ./modules/opencode.nix
     ./modules/gmail-mcp.nix
+    ./modules/firecrawl.nix
     ./modules/immich.nix
     ./modules/filebrowser.nix
   ];

@@ -18,8 +18,8 @@ in {
       mcp = {
         gmail = {
           type = "local";
-          enabled = false;
-          command = [ "uvx" "mcp-google-gmail@latest" ];
+          enabled = true;
+          command = [ "uv" "run" "--no-project" "--with" "mcp-google-gmail" "--with" "mcp>=1.8.0,<2" "mcp-google-gmail" ];
           environment = {
             GMAIL_CREDENTIALS_PATH = "${config.home.homeDirectory}/.config/gmail-mcp/credentials.json";
             GMAIL_TOKEN_PATH = "${config.home.homeDirectory}/.config/gmail-mcp/token.json";
