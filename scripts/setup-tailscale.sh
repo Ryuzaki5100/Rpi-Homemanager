@@ -62,4 +62,4 @@ else
     exit 1
 fi
 
-echo 'Defaults secure_path="/home/ryuzaki/.nix-profile/bin:/nix/var/nix/profiles/default/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"' | sudo tee /etc/sudoers.d/nix-path
+echo "Defaults secure_path=\"/home/$(whoami)/.nix-profile/bin:/nix/var/nix/profiles/default/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\"" | sudo tee /etc/sudoers.d/nix-path

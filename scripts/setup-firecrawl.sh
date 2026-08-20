@@ -55,7 +55,7 @@ if [ -f "${OC_CONFIG}" ] && grep -q "firecrawl" "${OC_CONFIG}" 2>/dev/null; then
     info "OpenCode config has Firecrawl MCP entry"
 else
     warn "OpenCode config not found or missing Firecrawl MCP entry."
-    echo "Run 'home-manager switch --flake ~/dotfiles#ryuzaki' to apply the HM module."
+    echo "Run 'home-manager switch --flake ~/dotfiles#$(whoami)' to apply the HM module."
 fi
 
 echo ""

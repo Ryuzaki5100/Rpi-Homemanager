@@ -33,9 +33,9 @@ fi
 say "Applying Home Manager configuration from $DOTFILES"
 cd "$DOTFILES"
 if has_cmd home-manager; then
-    home-manager switch --flake .#ryuzaki
+    home-manager switch --flake .#$(whoami)
 else
-    nix run github:nix-community/home-manager -- switch --flake .#ryuzaki
+    nix run github:nix-community/home-manager -- switch --flake .#$(whoami)
 fi
 
 # --- Password -----------------------------------------------------------------

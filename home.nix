@@ -1,4 +1,5 @@
 {
+  config,
   obsitui,
   nixvim-editor,
   ...
@@ -35,7 +36,7 @@
 
   xdg.configFile."mangal/mangal.toml".text = ''
     [downloader]
-    path = "/home/ryuzaki/manga"
+    path = "${config.home.homeDirectory}/manga"
     create_manga_dir = true
 
     [formats]

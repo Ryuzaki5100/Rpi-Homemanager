@@ -10,8 +10,8 @@ if ! dpkg -l samba 2>/dev/null | grep -q '^ii'; then
     sudo apt-get install -y samba
 fi
 
-read -rp "Enter Samba username [ryuzaki]: " username
-username="${username:-ryuzaki}"
+read -rp "Enter Samba username [$(whoami)]: " username
+username="${username:-$(whoami)}"
 
 if ! id "$username" &>/dev/null; then
     echo "User '$username' does not exist on this system. Create the Unix user first or use an existing one."

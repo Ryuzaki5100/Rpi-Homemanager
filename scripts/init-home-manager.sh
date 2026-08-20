@@ -9,7 +9,7 @@ if ! grep -q "^experimental-features = .*nix-command.*flakes" /etc/nix/nix.conf 
 fi
 
 echo "==> Applying Home Manager configuration..."
-nix run github:nix-community/home-manager -- switch --flake .#ryuzaki
+nix run github:nix-community/home-manager -- switch --flake .#$(whoami)
 
 FISH_PATH="$(command -v fish)"
 
