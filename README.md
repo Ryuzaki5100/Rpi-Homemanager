@@ -132,11 +132,14 @@ dotfiles/
 
 ### core.nix
 
-Sets the user identity and Home Manager state version.
+Sets the user identity and Home Manager state version. The username is resolved dynamically from the `$USER` environment variable (falling back to `ryuzaki` if unset), so the same flake works across NixOS, Debian, and RPi OS without editing.
 
 ```nix
-home.username      = "ryuzaki";
-home.homeDirectory = "/home/ryuzaki";
+currentUser = builtins.getEnv "USER";
+userName = if currentUser == "" then "ryuzaki" else currentUser;
+
+home.username      = userName;
+home.homeDirectory = "/home/${userName}";
 home.stateVersion  = "25.11";
 programs.home-manager.enable = true;
 ```
@@ -163,7 +166,7 @@ Configures Fish as the login shell.
 | Alias | Command |
 |---|---|
 | `nixvim` | `nix run github:Ryuzaki5100/nixvim --refresh` |
-| `rebuild-home-manager` | `home-manager switch --flake ~/dotfiles#ryuzaki` |
+| `rebuild-home-manager` | `home-manager switch --flake ~/dotfiles#(whoami) && exec fish` |
 | `update-home-manager` | `cd ~/dotfiles && nix flake update && cd -` |
 | `search` | `nix search nixpkgs` |
 | `clock` | `clock-rs -c bright-black -B -b` |
@@ -179,6 +182,8 @@ Configures Fish as the login shell.
 | Function | Description |
 |---|---|
 | `generate-ssh-key` | Prompts for an email and generates an Ed25519 SSH key (`ssh-keygen -t ed25519 -C "<email>"`) |
+| `rebuild-nixos` | Rebuilds the NixOS system from `~/rpi-nixos` via `nixos-rebuild switch --flake`. Gracefully errors if not on NixOS or the flake directory is missing. |
+| `update-nixos` | Updates the flake lock for `~/rpi-nixos`. Harmless on non-NixOS hosts. |
 
 ### opencode.nix
 
@@ -246,7 +251,7 @@ The MCP server configuration itself was moved to [`opencode.nix`](#opencodenix).
 **On a new machine:**
 ```bash
 git clone https://github.com/Ryuzaki5100/dotfiles ~/dotfiles
-home-manager switch --flake ~/dotfiles#ryuzaki
+home-manager switch --flake ~/dotfiles#$(whoami)
 # Copy credentials.json to ~/.config/gmail-mcp/credentials.json
 bash ~/dotfiles/scripts/setup-gmail-mcp.sh
 ```
@@ -262,7 +267,7 @@ Configures the [Firecrawl](https://firecrawl.dev) MCP server — web search, scr
 
 **Setup on a new machine:**
 ```bash
-home-manager switch --flake ~/dotfiles#ryuzaki   # installs nodejs + MCP config
+home-manager switch --flake ~/dotfiles#$(whoami)   # installs nodejs + MCP config
 bash ~/dotfiles/scripts/setup-firecrawl.sh       # saves the API key
 ```
 
@@ -399,7 +404,7 @@ Builds [obsitui](https://github.com/atr0t0s/obsitui) — a terminal UI for brows
 git clone https://github.com/Ryuzaki5100/dotfiles ~/dotfiles
 
 # Build and activate the Home Manager configuration
-home-manager switch --flake ~/dotfiles#ryuzaki
+home-manager switch --flake ~/dotfiles#$(whoami)
 ```
 
 **On a fresh system (bootstraps flakes + Home Manager):**
@@ -412,7 +417,7 @@ bash ~/dotfiles/scripts/init-home-manager.sh
 ### Updating dependencies
 
 ```bash
-cd ~/dotfiles && nix flake update && home-manager switch --flake .#ryuzaki
+cd ~/dotfiles && nix flake update && home-manager switch --flake .#$(whoami)
 ```
 
 Both commands are aliased as `rebuild-home-manager` and `update-home-manager` for convenience.
@@ -472,7 +477,7 @@ The script will:
 ##### 2. Run the HM module
 
 ```bash
-home-manager switch --flake ~/dotfiles#ryuzaki
+home-manager switch --flake ~/dotfiles#$(whoami)
 ```
 
 This installs `uv` and `gmail-mcp-auth`, and writes the MCP config to `~/.config/opencode/opencode.json`.
@@ -663,7 +668,7 @@ curl -d 'Summarize the last 3 git commits' http://localhost:8080
 
 | Command | Description |
 |---|---|
-| `rebuild-home-manager` | Apply the current configuration |
+| `rebuild-home-manager` | Apply the current configuration (auto-detects username) |
 | `update-home-manager` | Update flake lockfile and apply |
 | `nixvim` | Launch the Nixvim editor |
 | `search <query>` | Search for packages in nixpkgs |
