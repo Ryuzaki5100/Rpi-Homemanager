@@ -41,7 +41,7 @@ in
     yt-dlp
     yazi
     pandoc
-    localsend
+    # localsend
 
     # Networking & chat
     browsh
