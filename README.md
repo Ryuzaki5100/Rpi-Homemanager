@@ -211,10 +211,12 @@ Declarative package list installed via `home.packages`. Grouped by category:
 | Dev tools | `lazygit`, `tmux` |
 | Containers | `docker`, `docker-compose`, `jq` |
 | System info | `fastfetch`, `nitch`, `btop`, `clock-rs`, `smartmontools`, `exfatprogs` |
-| Media & graphics | `chafa`, `timg`, `mpv`, `ffmpeg`, `yt-dlp`, `yazi`, `pandoc`, `localsend`, `jocalsend` |
+| Media & graphics | `chafa`, `timg`, `mpv`, `ffmpeg`, `yt-dlp`, `yazi`, `pandoc` |
 | Networking & chat | `browsh`, `nchat`, `bluetuith`, `wifitui`, `tailscale`, `reddit-tui`, `reddix`, `discordo`, `wiki-tui`, `hackernews-tui`, `youtube-tui`, `smassh`, `gemini-cli`, `mangal` |
 | Obsidian TUIs | `basalt`, `obsitui`, `nixvim-editor` |
 | Fun | `cmatrix`, `posting` |
+
+> **Note:** `localsend` is commented out because its Flutter dependency (`aapt`) doesn't support `aarch64-linux`. It will be re-enabled once upstream support lands.
 
 > **Note:** `pandoc` doubles as the EPUB converter for the [`yt-summarizer`](#yt-summarizer) skill.
 
