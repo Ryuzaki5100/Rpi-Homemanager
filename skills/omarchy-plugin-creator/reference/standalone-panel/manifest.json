@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "yourname.panel",
+  "name": "Sample Panel",
+  "version": "0.1.0",
+  "author": "Your Name",
+  "license": "MIT",
+  "description": "A standalone floating panel summoned on demand.",
+  "kinds": ["panel"],
+  "entryPoints": { "panel": "Panel.qml" }
+}

@@ -50,6 +50,9 @@ flake.nix  ──►  home.nix  ──►  modules/*.nix
                       │
                       └── skills/
                             ├── batch-resume-tailor/SKILL.md
+                            ├── omarchy-plugin-creator/
+                            │     ├── SKILL.md
+                            │     └── reference/          # sample plugin repos
                             ├── single-resume-tailor/SKILL.md
                             ├── skill-creator/SKILL.md
                             ├── update-docs/SKILL.md
@@ -62,7 +65,7 @@ flake.nix  ──►  home.nix  ──►  modules/*.nix
 | **`home.nix`** | Thin shim; imports all modules under `modules/`. Receives custom packages as extra arguments. On activation, symlinks `/mnt/hdd` to `~/hdd` **only on the Pi**. |
 | **`modules/`** | Self-contained Nix files, each responsible for one concern. |
 | **`pkgs/`** | Custom package derivations exported both as flake outputs and installed in the Home Manager profile. |
-| **`skills/`** | OpenCode skill definitions (SKILL.md files) deployed via `xdg.configFile` symlinks. |
+| **`skills/`** | OpenCode skill definitions deployed via `xdg.configFile`. Each skill directory is symlinked **recursively**, so a skill can ship supporting files (reference samples, scripts) alongside its `SKILL.md`. |
 
 ## Cross-architecture support
 
@@ -176,6 +179,7 @@ dotfiles/
 │   └── sync-to-ssd.sh         # Sync Immich albums to an external drive
 └── skills/
     ├── batch-resume-tailor/ # OpenCode skill: batch tailor resumes from job posting URLs
+    ├── omarchy-plugin-creator/ # OpenCode skill: scaffold Omarchy shell plugins (+ reference samples)
     ├── single-resume-tailor/ # OpenCode skill: ATS-optimized one-page resume from a JD
     ├── skill-creator/     # OpenCode skill: interactive skill creation wizard
     ├── update-docs/       # OpenCode skill: auto-update docs from git changes
@@ -267,7 +271,8 @@ Configures [OpenCode](https://opencode.ai) — an AI coding assistant — via `p
 - Defines a Firecrawl MCP server (`firecrawl-mcp`, **enabled**, keyed on `~/.config/firecrawl/api-key`) — see [`firecrawl.nix`](#firecrawlnix)
 
 **Skill deployment:**
-- Automatically discovers subdirectories under `skills/` and symlinks each `SKILL.md` into `~/.config/opencode/skills/<name>/`
+- Automatically discovers subdirectories under `skills/` and symlinks each **entire directory** recursively into `~/.config/opencode/skills/<name>/` (`recursive = true`)
+- Deploying the whole directory — not just `SKILL.md` — lets a skill ship supporting files, such as the `omarchy-plugin-creator` reference plugin samples
 - This makes locally-developed skills available to OpenCode without manual copying
 
 **Omarchy theme integration** (only when `config.host.isOmarchy`):
@@ -419,7 +424,13 @@ Sets up the Obsidian vault ecosystem for terminal-based note-taking.
 
 ## Skills
 
-OpenCode skills are stored in `skills/` and auto-deployed to `~/.config/opencode/skills/<name>/` by the [`opencode.nix`](#opencodenix) module (any subdirectory with a `SKILL.md` is symlinked automatically).
+OpenCode skills are stored in `skills/` and auto-deployed to `~/.config/opencode/skills/<name>/` by the [`opencode.nix`](#opencodenix) module (any subdirectory with a `SKILL.md` is symlinked recursively, including its supporting files).
+
+### omarchy-plugin-creator
+
+Scaffolds a complete, valid, theme-native Omarchy shell plugin (bar widget, panel, overlay, menu, service, or full bar). It first interviews you for identity, purpose, bar/panel appearance, settings, and helper-script language, then generates a plugin repo — `manifest.json`, QML extending the `qs.Ui` base classes, an optional helper script, `Makefile`, CI, README, and LICENSE — that passes `omarchy plugin validate` and `qmllint`.
+
+The skill ships **reference samples** under `skills/omarchy-plugin-creator/reference/` (a bar-widget-with-panel, a standalone panel, a headless service, and a helper-script bar widget), which is why skills are deployed recursively. It also answers Omarchy plugin architecture, manifest, theming, and troubleshooting questions.
 
 ### skill-creator
 

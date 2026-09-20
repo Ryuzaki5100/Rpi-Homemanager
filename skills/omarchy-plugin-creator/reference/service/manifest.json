@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "yourname.service",
+  "name": "Sample Service",
+  "version": "0.1.0",
+  "author": "Your Name",
+  "license": "MIT",
+  "description": "A headless service that polls a value for other plugins.",
+  "kinds": ["service"],
+  "entryPoints": { "service": "Service.qml" }
+}

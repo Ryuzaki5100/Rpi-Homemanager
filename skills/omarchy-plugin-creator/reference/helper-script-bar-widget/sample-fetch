@@ -1,0 +1,24 @@
+#!/usr/bin/env python3
+"""Reference helper: print a JSON value on stdout.
+
+QML spawns this with Quickshell's Process and parses each stdout line as
+JSON. Keep helpers dependency-light, print errors to stderr, and never embed
+secrets.
+"""
+
+import json
+import sys
+from datetime import datetime
+
+
+def main() -> int:
+    payload = {
+        "value": datetime.now().strftime("%H:%M:%S"),
+        "ok": True,
+    }
+    print(json.dumps(payload))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

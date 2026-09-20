@@ -4,10 +4,15 @@ let
   skillsDir = ../skills;
   skillDirs = builtins.readDir skillsDir;
   skillNames = builtins.attrNames (lib.filterAttrs (name: type: type == "directory") skillDirs);
+  # Deploy each skill directory recursively (not just SKILL.md) so skills can
+  # ship supporting files, e.g. the omarchy-plugin-creator reference samples.
   skillConfigs = builtins.listToAttrs (builtins.map
     (name: {
-      name = "opencode/skills/${name}/SKILL.md";
-      value.source = "${skillsDir}/${name}/SKILL.md";
+      name = "opencode/skills/${name}";
+      value = {
+        source = "${skillsDir}/${name}";
+        recursive = true;
+      };
     })
     skillNames);
 in {

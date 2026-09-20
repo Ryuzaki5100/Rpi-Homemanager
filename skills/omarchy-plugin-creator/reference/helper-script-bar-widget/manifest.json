@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "id": "yourname.helper-sample",
+  "name": "Helper Sample",
+  "version": "0.1.0",
+  "author": "Your Name",
+  "license": "MIT",
+  "description": "A bar widget that renders data produced by a helper script.",
+  "kinds": ["bar-widget"],
+  "entryPoints": { "barWidget": "BarWidget.qml" },
+  "barWidget": {
+    "displayName": "Helper Sample",
+    "category": "Utilities",
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": { "refreshIntervalSec": 300 },
+    "schema": [
+      {
+        "key": "refreshIntervalSec",
+        "type": "integer",
+        "label": "Refresh interval (seconds)",
+        "min": 60,
+        "max": 3600,
+        "step": 60,
+        "defaultValue": 300
+      }
+    ]
+  }
+}
