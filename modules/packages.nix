@@ -1,5 +1,6 @@
 {
   pkgs,
+  config,
   obsitui,
   nixvim-editor,
   ...
@@ -7,10 +8,9 @@
 
 let
   inherit (pkgs) lib;
-in
-{
 
-  home.packages = with pkgs; [
+  # Packages that build and run on every supported architecture.
+  common = with pkgs; [
     # Editors
     neovim
     code-server
@@ -41,7 +41,6 @@ in
     yt-dlp
     yazi
     pandoc
-    # localsend
 
     # Networking & chat
     browsh
@@ -76,4 +75,15 @@ in
     # Automation tools
     # openclaw
   ];
+
+  # x86_64-only extras. `localsend` pulls in Flutter's `aapt`, which has no
+  # aarch64-linux build, so it is only available on x86.
+  x86Only = with pkgs; [
+    localsend
+  ];
+in
+{
+  home.packages =
+    common
+    ++ lib.optionals config.host.isX86 x86Only;
 }

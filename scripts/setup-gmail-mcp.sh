@@ -99,7 +99,7 @@ if [ -f "${OC_CONFIG}" ] && grep -q "gmail" "${OC_CONFIG}" 2>/dev/null; then
     info "OpenCode config has Gmail MCP entry"
 else
     warn "OpenCode config not found or missing Gmail MCP entry."
-    echo "Run 'home-manager switch --flake ~/dotfiles' to apply the HM module."
+    echo "Run 'home-manager switch --flake ~/dotfiles#$(whoami) --impure' to apply the HM module."
 fi
 
 # Step 6: Test connection

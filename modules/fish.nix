@@ -17,7 +17,9 @@
 
     shellAliases = {
       nixvim = "nix run github:Ryuzaki5100/nixvim --refresh";
-      rebuild-home-manager = "home-manager switch --flake ~/dotfiles#(whoami) && exec fish";
+      # --impure lets the flake auto-detect the host architecture
+      # (builtins.currentSystem) and the invoking user (USER).
+      rebuild-home-manager = "home-manager switch --flake ~/dotfiles#(whoami) --impure && exec fish";
       update-home-manager = "cd ~/dotfiles && nix flake update && cd -";
       search = "nix search nixpkgs";
       display = "chafa -f kitty --fit-width";

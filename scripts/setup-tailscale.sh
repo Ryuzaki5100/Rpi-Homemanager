@@ -17,8 +17,13 @@ TAILSCALED="$(dirname "$TAILSCALE")/tailscaled"
 
 echo "==> Starting tailscaled daemon..."
 if ! pgrep -x tailscaled &>/dev/null; then
-    sudo env "PATH=$PATH" "$TAILSCALED" &>/dev/null &
-    sleep 2
+    if systemctl list-unit-files tailscaled.service 2>/dev/null | grep -q '^tailscaled\.service'; then
+        sudo systemctl start tailscaled
+        sleep 2
+    else
+        sudo env "PATH=$PATH" "$TAILSCALED" &>/dev/null &
+        sleep 2
+    fi
 fi
 
 echo "==> Starting Tailscale login..."
@@ -31,7 +36,7 @@ echo "==> Tailscale status:"
 if "$TAILSCALE" status --json | grep -q '"BackendState"[[:space:]]*:[[:space:]]*"Running"'; then
     echo ""
     echo "==> Tailscale is active. Enabling systemd service for auto-start on boot..."
-    if systemctl list-unit-files tailscaled.service &>/dev/null; then
+    if systemctl list-unit-files tailscaled.service 2>/dev/null | grep -q '^tailscaled\.service'; then
         sudo systemctl enable tailscaled
     else
         echo "    systemd unit not found — creating one..."

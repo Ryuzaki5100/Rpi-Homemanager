@@ -6,9 +6,30 @@ if [ "$EUID" -eq 0 ]; then
     exit 1
 fi
 
+# The USB gadget is implemented by the Broadcom dwc2 controller, so this only
+# applies to a Raspberry Pi. Skip cleanly on x86 laptops/desktops.
+ARCH="$(uname -m)"
+if [ "$ARCH" != "aarch64" ] && [ "$ARCH" != "armv7l" ]; then
+    echo "setup-rpi-usb-gadget: Raspberry Pi USB gadget is unavailable on $ARCH."
+    echo "    This script configures the Pi's dwc2/g_ether USB peripheral mode."
+    echo "    Skipping on this host."
+    exit 0
+fi
+
+# Raspberry Pi OS moved the boot partition from /boot to /boot/firmware.
+if [ -d /boot/firmware ]; then
+    BOOT=/boot/firmware
+else
+    BOOT=/boot
+fi
+
 echo "==> Adding USB gadget kernel modules to cmdline.txt..."
 
-CMDLINE=/boot/firmware/cmdline.txt
+CMDLINE="$BOOT/cmdline.txt"
+if [ ! -f "$CMDLINE" ]; then
+    echo "setup-rpi-usb-gadget: $CMDLINE not found; not a Raspberry Pi boot partition. Skipping."
+    exit 0
+fi
 if ! grep -q "modules-load=dwc2,g_ether" "$CMDLINE" 2>/dev/null; then
     sudo sed -i 's/rootwait/rootwait modules-load=dwc2,g_ether/' "$CMDLINE"
 else
@@ -17,7 +38,7 @@ fi
 
 echo "==> Adding dwc2 overlay in config.txt..."
 
-CONFIG=/boot/firmware/config.txt
+CONFIG="$BOOT/config.txt"
 
 if grep -A20 '^\[all\]' "$CONFIG" | grep -q '^dtoverlay=dwc2'; then
     echo "    dtoverlay=dwc2 already present under [all], skipping."

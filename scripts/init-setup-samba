@@ -2,12 +2,31 @@
 set -euo pipefail
 
 SMB_CONF="/etc/samba/smb.conf"
+# Branding shown to Apple/Windows clients. Override for a non-Pi host:
+#   SMB_SERVER_NAME=myserver SMB_FRUIT_MODEL=MacSamba bash init-setup-samba
+SMB_SERVER_NAME="${SMB_SERVER_NAME:-RPI5}"
+SMB_FRUIT_MODEL="${SMB_FRUIT_MODEL:-RPi5}"
 
 echo "=== Samba Setup ==="
 
-if ! dpkg -l samba 2>/dev/null | grep -q '^ii'; then
-    echo "Installing Samba via apt..."
-    sudo apt-get install -y samba
+# Install a package using whichever native package manager this host has, so
+# the script works on Debian/RPi OS (apt), Arch (pacman) and Fedora (dnf).
+install_pkg() {
+    if command -v apt-get >/dev/null 2>&1; then
+        sudo apt-get install -y "$@"
+    elif command -v pacman >/dev/null 2>&1; then
+        sudo pacman -S --needed --noconfirm "$@"
+    elif command -v dnf >/dev/null 2>&1; then
+        sudo dnf install -y "$@"
+    else
+        echo "No supported package manager (apt/pacman/dnf). Install manually: $*" >&2
+        return 1
+    fi
+}
+
+if ! command -v smbd >/dev/null 2>&1; then
+    echo "Installing Samba..."
+    install_pkg samba
 fi
 
 read -rp "Enter Samba username [$(whoami)]: " username
@@ -56,8 +75,8 @@ echo "Writing $SMB_CONF..."
 sudo tee "$SMB_CONF" > /dev/null <<SMBCONF
 [global]
 workgroup = WORKGROUP
-server string = RPi5
-netbios name = RPI5
+server string = $SMB_SERVER_NAME
+netbios name = $SMB_SERVER_NAME
 security = user
 server role = standalone server
 map to guest = Bad User
@@ -93,7 +112,7 @@ directory mask = 0755
 force user = $username
 vfs objects = recycle fruit streams_xattr
 fruit:metadata = netatalk
-fruit:model = RPi5
+fruit:model = $SMB_FRUIT_MODEL
 fruit:advertise_fullsync = true
 recycle:repository = .recycle/%U
 recycle:keeptree = yes
@@ -109,7 +128,7 @@ emit_share() {
     if fs_supports_xattr "$path"; then
         vfs="vfs objects = recycle fruit streams_xattr"
         extra="fruit:metadata = netatalk
-fruit:model = RPi5
+fruit:model = $SMB_FRUIT_MODEL
 fruit:advertise_fullsync = true"
     fi
     sudo tee -a "$SMB_CONF" > /dev/null <<EOF
@@ -137,7 +156,7 @@ emit_share "hdd" "/mnt/hdd" ".recycle" "$username's HDD share"
 emit_share "ssd" "/mnt/ssd" ".recycle" "$username's SSD share"
 
 if ! command -v expect &>/dev/null; then
-    sudo apt-get install -y -qq expect
+    install_pkg expect
 fi
 
 echo "Setting SMB password for $username..."
@@ -151,8 +170,15 @@ send "$password\r"
 expect eof
 EXPSETUP
 
-echo "Enabling and starting smbd..."
-sudo systemctl enable --now smbd
+echo "Enabling and starting Samba..."
+# Debian/RPi OS use smbd.service; Arch uses smb.service.
+if systemctl list-unit-files smbd.service 2>/dev/null | grep -q '^smbd\.service'; then
+    sudo systemctl enable --now smbd
+elif systemctl list-unit-files smb.service 2>/dev/null | grep -q '^smb\.service'; then
+    sudo systemctl enable --now smb
+else
+    echo "Warning: neither smbd.service nor smb.service found; start Samba manually." >&2
+fi
 
 ipaddr=$(hostname -I | awk '{print $1}')
 echo "=== Samba setup complete! ==="

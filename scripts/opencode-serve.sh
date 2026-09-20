@@ -25,9 +25,19 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-if lsof -ti:"${OPENCODE_PORT}" &>/dev/null; then
+# Free the port if a previous instance is still bound. Prefer lsof, fall back
+# to fuser/ss so this works on hosts without lsof installed.
+port_pids() {
+    if command -v lsof >/dev/null 2>&1; then
+        lsof -ti:"${OPENCODE_PORT}" 2>/dev/null
+    elif command -v fuser >/dev/null 2>&1; then
+        fuser "${OPENCODE_PORT}"/tcp 2>/dev/null
+    fi
+}
+
+if [ -n "$(port_pids)" ]; then
     echo "==> Port ${OPENCODE_PORT} in use; killing old process..."
-    lsof -ti:"${OPENCODE_PORT}" | xargs kill 2>/dev/null || true
+    port_pids | xargs -r kill 2>/dev/null || true
     sleep 1
 fi
 

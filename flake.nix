@@ -1,5 +1,5 @@
 {
-  description = "Home Manager configuration";
+  description = "Home Manager configuration (cross-architecture: aarch64-linux / x86_64-linux)";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -16,7 +16,12 @@
       ...
     }:
     let
-      system = "aarch64-linux";
+      # Auto-detect the host system so the same flake builds for a Raspberry Pi
+      # (aarch64-linux) and x86_64 laptops/desktops. `builtins.currentSystem`
+      # is impure, so evaluation needs `--impure`; the rebuild alias/wrapper
+      # passes it. The `or` fallback keeps pure evaluation working (defaulting
+      # to the historic aarch64 target) instead of hard-failing.
+      system = builtins.currentSystem or "aarch64-linux";
       pkgs = import nixpkgs { inherit system; };
 
       # Resolve the invoking user dynamically (whoami at eval time) so the

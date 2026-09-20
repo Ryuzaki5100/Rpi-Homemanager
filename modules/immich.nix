@@ -1,5 +1,20 @@
 { pkgs, lib, config, ... }:
 
+let
+  inherit (config.host) isRpi;
+
+  # The Pi 5 exposes a V4L2 HEVC decoder at /dev/video19. On x86 there is no
+  # such device, and passing a missing device makes Docker refuse to start the
+  # container, so only the Pi gets the passthrough.
+  devicesBlock = lib.optionalString isRpi "    devices:\n      - /dev/video19:/dev/video19\n";
+
+  hwAccelEnabled = if isRpi then "true" else "false";
+  hwAccelComment =
+    if isRpi then
+      "# Hardware acceleration (Pi 5 V4L2 HEVC decoder)"
+    else
+      "# Hardware acceleration disabled (no V4L2 device passthrough on x86)";
+in
 {
   xdg.configFile."immich/docker-compose.yml".text = ''
     name: immich
@@ -11,8 +26,7 @@
         volumes:
           - ''${UPLOAD_LOCATION}:/data
           - /etc/localtime:/etc/localtime:ro
-        devices:
-          - /dev/video19:/dev/video19
+    ${devicesBlock}
         env_file:
           - .env
         ports:
@@ -85,8 +99,8 @@
     # Immich version (pin to specific version if needed)
     IMMICH_VERSION=v3
 
-    # Hardware acceleration (Pi 5 V4L2 HEVC decoder)
-    IMMICH_HW_ACCEL_ENABLED=true
+    ${hwAccelComment}
+    IMMICH_HW_ACCEL_ENABLED=${hwAccelEnabled}
 
     # Postgres password (local auth only, not exposed)
     DB_PASSWORD=immichpostgres

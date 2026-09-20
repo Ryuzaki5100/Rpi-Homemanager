@@ -1,6 +1,14 @@
+# Resolve this repo's own directory so targets work regardless of where it is
+# cloned (historically ~/dotfiles, but also e.g. ~/Rpi-Homemanager).
+ROOT := $(CURDIR)
+
 COMPOSE := docker compose -f $(HOME)/.config/immich/docker-compose.yml
 IMMICH_DIR := $(HOME)/.config/immich
 BACKUP_DIR := $(HOME)/immich/backups
+
+# External HDD used by the Pi storage targets. Override if your drive differs:
+#   make immich-hdd-mount HDD_UUID=XXXX-XXXX
+HDD_UUID ?= 7B6D-F242
 
 .PHONY: help immich-setup immich-teardown immich-start immich-stop immich-shutdown immich-restart immich-pull immich-update immich-logs immich-logs-server immich-logs-ml immich-logs-postgres immich-logs-redis immich-status immich-exec immich-db-shell immich-sync immich-backup immich-restore immich-clean immich-prune immich-ip immich-check-hdd immich-hdd-mount immich-hdd-unmount immich-hdd-status immich-link-library immich-hdd-undo immich-ssd-undo immich-hdd-backup immich-ssd-backup
 
@@ -57,8 +65,6 @@ help:
 immich-check-hdd:
 	@mountpoint -q /mnt/hdd || { echo "ERROR: /mnt/hdd is not mounted. Insert the HDD and run: sudo mount /mnt/hdd"; exit 1; }
 
-HDD_UUID := 7B6D-F242
-
 immich-hdd-mount:
 	@CUR=$$(lsblk -o UUID,NAME -rn /dev/sd* 2>/dev/null | awk -v u="$(HDD_UUID)" '$$1==u{print "/dev/"$$2}' | head -1); \
 	if [ -z "$$CUR" ]; then \
@@ -113,21 +119,21 @@ immich-hdd-status:
 
 immich-hdd-undo:
 	@mountpoint -q /mnt/hdd || { echo "ERROR: /mnt/hdd is not mounted"; exit 1; }
-	bash $(HOME)/dotfiles/scripts/samba-recycle-restore.sh /mnt/hdd
+	bash $(ROOT)/scripts/samba-recycle-restore.sh /mnt/hdd
 
 immich-ssd-undo:
 	@mountpoint -q /mnt/ssd || { echo "ERROR: /mnt/ssd is not mounted"; exit 1; }
-	bash $(HOME)/dotfiles/scripts/samba-recycle-restore.sh /mnt/ssd
+	bash $(ROOT)/scripts/samba-recycle-restore.sh /mnt/ssd
 
 immich-hdd-backup:
 	@mountpoint -q /mnt/hdd || { echo "ERROR: /mnt/hdd is not mounted"; exit 1; }
 	@mountpoint -q /mnt/ssd || { echo "ERROR: /mnt/ssd is not mounted (backup target)"; exit 1; }
-	bash $(HOME)/dotfiles/scripts/backup-drive.sh /mnt/hdd /mnt/ssd/backups/hdd
+	bash $(ROOT)/scripts/backup-drive.sh /mnt/hdd /mnt/ssd/backups/hdd
 
 immich-ssd-backup:
 	@mountpoint -q /mnt/ssd || { echo "ERROR: /mnt/ssd is not mounted"; exit 1; }
 	@mountpoint -q /mnt/hdd || { echo "ERROR: /mnt/hdd is not mounted (backup target)"; exit 1; }
-	bash $(HOME)/dotfiles/scripts/backup-drive.sh /mnt/ssd /mnt/hdd/backups/ssd
+	bash $(ROOT)/scripts/backup-drive.sh /mnt/ssd /mnt/hdd/backups/ssd
 
 immich-link-library:
 	@if [ -L ~/immich/library ]; then \
@@ -209,7 +215,7 @@ immich-db-shell:
 # --- Sync & Backup ---
 
 immich-sync: immich-hdd-mount
-	bash $(HOME)/dotfiles/scripts/sync-to-ssd.sh "$(DEST)"
+	bash $(ROOT)/scripts/sync-to-ssd.sh "$(DEST)"
 
 immich-backup:
 	@mkdir -p $(BACKUP_DIR)

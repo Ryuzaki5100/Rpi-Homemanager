@@ -1,11 +1,20 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-RES_WIDTH=2388
-RES_HEIGHT=1668
-REFRESH=60
+# Defaults match the iPad panel used with the Pi. Override on other hosts, e.g.
+#   RES_WIDTH=1920 RES_HEIGHT=1080 REFRESH=60 bash setup-wayvnc.sh
+RES_WIDTH="${RES_WIDTH:-2388}"
+RES_HEIGHT="${RES_HEIGHT:-1668}"
+REFRESH="${REFRESH:-60}"
 VNC_PASSWD=""
 VNC_SERVICE_FILE="/etc/systemd/system/wayvnc-session.service"
+
+# The Pi GPU (V4L2/DRM) path is Pi-only; x86 uses the regular wlroots backend.
+ARCH="$(uname -m)"
+WAYVNC_GPU_FLAG=""
+if [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "armv7l" ]; then
+    WAYVNC_GPU_FLAG="--gpu"
+fi
 
 if [ "$EUID" -eq 0 ]; then
     echo "Do not run as root. This script uses sudo when needed."
@@ -40,10 +49,17 @@ done
 echo "==> Creating wayvnc config..."
 mkdir -p "$HOME/.config/wayvnc"
 
-OUTPUT_NAME=$(sudo -u "$USER" XDG_RUNTIME_DIR="/run/user/$(id -u)" WAYLAND_DISPLAY=wayland-0 wlr-randr 2>/dev/null | head -1 | awk '{print $1}')
+OUTPUT_NAME=$(sudo -u "$USER" XDG_RUNTIME_DIR="/run/user/$(id -u)" WAYLAND_DISPLAY=wayland-0 wlr-randr 2>/dev/null | head -1 | awk '{print $1}' || true)
 if [ -z "$OUTPUT_NAME" ]; then
     echo "    Warning: Could not detect Wayland output name. Using 'NOOP-1'."
     OUTPUT_NAME="NOOP-1"
+fi
+
+# Only force a custom mode when wlr-randr is actually installed; otherwise the
+# service would fail on hosts without it (e.g. a plain x86 desktop).
+RANDR_CMD="/usr/bin/wlr-randr --output $OUTPUT_NAME --custom-mode ${RES_WIDTH}x${RES_HEIGHT}@${REFRESH}"
+if [ ! -x /usr/bin/wlr-randr ]; then
+    RANDR_CMD="/bin/true"
 fi
 
 cat > "$HOME/.config/wayvnc/config" << CONFIGEOF
@@ -61,9 +77,18 @@ echo "    Config written to $HOME/.config/wayvnc/config"
 
 echo "==> Generating TLS/RSA keys..."
 if [ ! -f /etc/wayvnc/rsa_key.pem ] || [ ! -f /etc/wayvnc/tls_key.pem ]; then
-    sudo /usr/sbin/wayvnc-generate-keys.sh
-    sudo chmod 644 /etc/wayvnc/*.pem
-    echo "    Keys generated."
+    if [ -x /usr/sbin/wayvnc-generate-keys.sh ]; then
+        sudo /usr/sbin/wayvnc-generate-keys.sh
+    elif command -v wayvnc-generate-keys.sh >/dev/null 2>&1; then
+        sudo "$(command -v wayvnc-generate-keys.sh)"
+    else
+        echo "    Warning: wayvnc-generate-keys.sh not found; skipping TLS key generation."
+        echo "    Install it (Debian/RPi OS) or generate keys manually under /etc/wayvnc/."
+    fi
+    if ls /etc/wayvnc/*.pem >/dev/null 2>&1; then
+        sudo chmod 644 /etc/wayvnc/*.pem
+        echo "    Keys generated."
+    fi
 else
     echo "    Keys already exist, skipping."
 fi
@@ -85,8 +110,8 @@ User=$USER
 Environment=XDG_RUNTIME_DIR=/run/user/$(id -u)
 Environment=WAYLAND_DISPLAY=wayland-0
 ExecStartPre=/bin/sh -c 'i=0; while [ ! -S /run/user/$(id -u)/wayland-0 ] && [ \$i -lt 30 ]; do sleep 1; i=\$((i+1)); done; [ -S /run/user/$(id -u)/wayland-0 ]'
-ExecStartPre=/usr/bin/wlr-randr --output $OUTPUT_NAME --custom-mode ${RES_WIDTH}x${RES_HEIGHT}@${REFRESH}
-ExecStart=/usr/bin/wayvnc --gpu --config $HOME/.config/wayvnc/config
+ExecStartPre=$RANDR_CMD
+ExecStart=/usr/bin/wayvnc $WAYVNC_GPU_FLAG --config $HOME/.config/wayvnc/config
 Restart=on-failure
 RestartSec=2
 

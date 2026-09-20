@@ -11,9 +11,11 @@ set -euo pipefail
 #   make immich-hdd-mount
 
 RULE_FILE="/etc/udev/rules.d/99-immich-hdd.rules"
-HDD_UUID="7B6D-F242"
+# Override for a different drive: HDD_UUID=XXXX-XXXX bash init-setup-hdd.sh
+HDD_UUID="${HDD_UUID:-7B6D-F242}"
 
 echo "=== HDD auto-mount prevention ==="
+echo "    Target UUID: $HDD_UUID"
 
 if [ -f "$RULE_FILE" ] && grep -q "$HDD_UUID" "$RULE_FILE"; then
     echo "udev rule already present ($RULE_FILE); skipping"

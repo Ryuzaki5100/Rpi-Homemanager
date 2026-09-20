@@ -9,7 +9,9 @@ if ! grep -q "^experimental-features = .*nix-command.*flakes" /etc/nix/nix.conf 
 fi
 
 echo "==> Applying Home Manager configuration..."
-nix run github:nix-community/home-manager -- switch --flake .#$(whoami)
+# --impure lets the flake auto-detect the host architecture (aarch64/x86_64)
+# and the invoking user.
+nix run github:nix-community/home-manager -- switch --flake .#$(whoami) --impure
 
 FISH_PATH="$(command -v fish)"
 

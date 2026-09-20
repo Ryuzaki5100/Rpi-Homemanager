@@ -46,5 +46,5 @@ If the skill needs supporting files (scripts, references), create them in the sa
 
 Tell the user:
 - The skill has been created at `~/dotfiles/skills/<skill-name>/`
-- To deploy it globally, run `home-manager switch` in `~/dotfiles/`
+- To deploy it globally, run `home-manager switch --flake .#$(whoami) --impure` in `~/dotfiles/`
 - After deployment, the skill will be available in `~/.config/opencode/skills/<skill-name>/`

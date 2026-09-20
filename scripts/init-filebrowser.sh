@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# One-shot reproducible Filebrowser setup for the RPi.
+# One-shot reproducible Filebrowser setup (Raspberry Pi or x86 Linux).
 # - Applies the Home Manager flake (installs filebrowser + systemd unit)
 # - Interactively sets (or updates) the admin password
 # - Ensures DB, min password length, and TUS chunk size are configured
@@ -10,7 +10,9 @@ set -euo pipefail
 # Idempotent: safe to re-run. Prompts for the password unless
 # FILEBROWSER_PASSWORD is already set in the environment.
 
-DOTFILES="${DOTFILES:-$HOME/dotfiles}"
+# Default to this script's own repo (works regardless of clone location).
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DOTFILES="${DOTFILES:-$(dirname "$SCRIPT_DIR")}"
 DB="$HOME/.config/filebrowser/filebrowser.db"
 USERNAME="${FILEBROWSER_USERNAME:-admin}"
 TUS_CHUNK_SIZE="${FILEBROWSER_TUS_CHUNK_SIZE:-2147483648}"
@@ -32,10 +34,11 @@ fi
 
 say "Applying Home Manager configuration from $DOTFILES"
 cd "$DOTFILES"
+# --impure lets the flake auto-detect the host architecture and user.
 if has_cmd home-manager; then
-    home-manager switch --flake .#$(whoami)
+    home-manager switch --flake .#$(whoami) --impure
 else
-    nix run github:nix-community/home-manager -- switch --flake .#$(whoami)
+    nix run github:nix-community/home-manager -- switch --flake .#$(whoami) --impure
 fi
 
 # --- Password -----------------------------------------------------------------

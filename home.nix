@@ -1,5 +1,6 @@
 {
   config,
+  lib,
   obsitui,
   nixvim-editor,
   ...
@@ -7,6 +8,7 @@
 {
 
   imports = [
+    ./modules/host.nix
     ./modules/core.nix
     ./modules/env.nix
     ./modules/fish.nix
@@ -26,7 +28,9 @@
     ];
   };
 
-  home.activation.createMountLinks = ''
+  # The /mnt/hdd mount is Raspberry Pi storage; skip the convenience symlink on
+  # x86 hosts where it would just dangle.
+  home.activation.createMountLinks = lib.mkIf config.host.isRpi ''
     ln -sfn /mnt/hdd ~/hdd
   '';
 
