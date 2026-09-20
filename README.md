@@ -84,10 +84,12 @@ The same flake targets both the Raspberry Pi (`aarch64-linux`) and x86_64 laptop
    | `host.arch` | `aarch64` \| `x86_64` \| `other` | CPU family |
    | `host.isRpi` | bool | True on `aarch64-linux` (Raspberry Pi target) |
    | `host.isX86` | bool | True on `x86_64-linux` |
+   | `host.isOmarchy` | bool | True when Omarchy is installed (detected via `/usr/share/omarchy/bin/omarchy-theme-set`) |
 
-3. **Architecture-conditional config** — hardware and package differences are gated on `config.host.*`:
+3. **Host-conditional config** — hardware, package, and desktop differences are gated on `config.host.*`:
    - **Immich**: `/dev/video19` passthrough and `IMMICH_HW_ACCEL_ENABLED=true` are Pi-only; x86 gets `IMMICH_HW_ACCEL_ENABLED=false` and no device passthrough (a missing device would stop the container from starting).
    - **Packages**: `localsend` is installed on x86 only — its Flutter dependency (`aapt`) has no `aarch64-linux` build.
+   - **Omarchy** (`host.isOmarchy`): the OpenCode theme integration (`opencode.nix`) and the Omarchy Spotify fish functions are gated on Omarchy being present, so the Raspberry Pi and other non-Omarchy hosts evaluate and build cleanly without them.
    - **Shell scripts**: all scripts are CPU-architecture agnostic. They share [`scripts/lib/common.sh`](scripts/lib/common.sh), which detects the host at runtime (`ARCH`, `IS_X86`, `IS_ARM`, `IS_RPI`) and provides `host_ip`/`have`/`require_rpi` helpers. Pi-only helpers (`setup-rpi-usb-gadget.sh`) call `require_rpi` and skip cleanly elsewhere; `setup-wayvnc.sh` passes `--gpu` only on ARM.
    - **Samba setup** detects `apt`/`pacman`/`dnf` and the distro's `smbd`/`smb` service name, so it works on Raspberry Pi OS, Arch and Fedora.
 
@@ -103,7 +105,7 @@ The same flake targets both the Raspberry Pi (`aarch64-linux`) and x86_64 laptop
    | `setup-immich.sh` | Portable; arch-aware compose comes from `modules/immich.nix` |
    | `init-home-manager.sh`, `init-filebrowser.sh` | Portable; auto-init the Nix store, pass `--impure` |
    | `install-nix.sh` | Portable; official installer auto-detects the CPU |
-   | `add-subtitles.sh`, `backup-drive.sh`, `download-vid.sh`, `opencode-serve.sh`, `samba-recycle-restore.sh`, `sync-to-ssd.sh`, `setup-firecrawl.sh`, `setup-gmail-mcp.sh`, `setup-tailscale.sh`, `*.py` | Portable (no architecture assumptions) |
+   | `add-subtitles.sh`, `backup-drive.sh`, `download-vid.sh`, `opencode-serve.sh`, `reapply-omarchy-spotify-patches.sh`, `samba-recycle-restore.sh`, `sync-to-ssd.sh`, `setup-firecrawl.sh`, `setup-gmail-mcp.sh`, `setup-tailscale.sh`, `*.py` | Portable (no architecture assumptions) |
 
 ### Dependencies
 
@@ -160,8 +162,10 @@ dotfiles/
 │   ├── init-setup-hdd.sh     # Stop desktop auto-mount of the HDD; udev rule for /mnt/hdd
 │   ├── init-setup-samba       # Samba setup (home/hdd/ssd shares + recycle; apt/pacman/dnf)
 │   ├── opencode-gateway.py    # HTTP gateway proxy to opencode serve
+│   ├── opencode-omarchy-theme.sh # Generate the OpenCode theme from the Omarchy palette
 │   ├── opencode-serve.sh      # Launch opencode serve and expose on tailnet
 │   ├── download-vid.sh        # Download 4K video with yt-dlp and ffmpeg
+│   ├── reapply-omarchy-spotify-patches.sh # Reapply the Omarchy Spotify plugin workaround after updates
 │   ├── samba-recycle-restore.sh # Restore files from a Samba recycle bin
 │   ├── setup-gmail-mcp.sh     # Interactive Gmail MCP setup wizard
 │   ├── setup-firecrawl.sh     # Save a Firecrawl API key for the MCP server
@@ -190,6 +194,7 @@ Defines the read-only `host.*` options used to branch configuration by architect
 | `host.arch` | `aarch64` \| `x86_64` \| `other` | detected | CPU family |
 | `host.isRpi` | bool | detected | True on the Raspberry Pi target |
 | `host.isX86` | bool | detected | True on x86_64 laptops/desktops |
+| `host.isOmarchy` | bool | `pathExists /usr/share/omarchy/bin/omarchy-theme-set` | True when Omarchy is installed on the current host |
 
 ### core.nix
 
@@ -218,7 +223,7 @@ Exports a single session variable:
 Configures Fish as the login shell.
 
 **Interactive shell initialisation:**
-- Sources the Nix daemon profile for environment integration
+- Sources the Nix daemon profile for environment integration (guarded so it is skipped when the profile file is absent, e.g. a distro that skipped the Nix store init)
 - Re-exports `EDITOR` for shell sessions
 - Binds autosuggestion acceptance to multiple keys: **Ctrl+Space**, **Alt+Space**, **Alt+.**, and **Shift+Tab**
 
@@ -237,14 +242,17 @@ Configures Fish as the login shell.
 | `ga` | `git add .` |
 | `op` | `opencode` |
 | `yt` | `~/dotfiles/scripts/download-vid.sh` |
+| `spotify-patch` | `bash ~/dotfiles/scripts/reapply-omarchy-spotify-patches.sh` |
 
 **Functions:**
 
 | Function | Description |
 |---|---|
+| `opencode` | Refreshes the OpenCode theme from the active Omarchy palette (via `~/.config/opencode/omarchy-theme.sh`) and then launches `opencode`; `op` is an alias for it. Non-Omarchy hosts just launch OpenCode. |
 | `generate-ssh-key` | Prompts for an email and generates an Ed25519 SSH key (`ssh-keygen -t ed25519 -C "<email>"`) |
 | `rebuild-nixos` | Rebuilds the NixOS system from `~/rpi-nixos` via `nixos-rebuild switch --flake`. Gracefully errors if not on NixOS or the flake directory is missing. |
 | `update-nixos` | Updates the flake lock for `~/rpi-nixos`. Harmless on non-NixOS hosts. |
+| `sp` | Controls the Omarchy Spotify shell plugin: `sp` / `sp full` opens the full player, `sp mini` the bar mini-player, `sp up` / `sp down` adjust Spotify volume by 5%. Prints a clear message on non-Omarchy hosts. |
 
 ### opencode.nix
 
@@ -262,6 +270,27 @@ Configures [OpenCode](https://opencode.ai) — an AI coding assistant — via `p
 - Automatically discovers subdirectories under `skills/` and symlinks each `SKILL.md` into `~/.config/opencode/skills/<name>/`
 - This makes locally-developed skills available to OpenCode without manual copying
 
+**Omarchy theme integration** (only when `config.host.isOmarchy`):
+- Sets `programs.opencode.tui.theme = "omarchy"`, so the TUI uses a theme generated from the active Omarchy palette. The theme file itself is **not** managed by Nix — it is written at runtime.
+- Deploys [`scripts/opencode-omarchy-theme.sh`](scripts/opencode-omarchy-theme.sh) to `~/.config/opencode/omarchy-theme.sh`. It reads `~/.local/state/omarchy/current/theme/colors.toml` and writes `~/.config/opencode/themes/omarchy.json`.
+- Installs a `theme-set` hook (`~/.config/omarchy/hooks/theme-set.d/opencode-theme.hook`) that regenerates the theme after every `omarchy theme set` and re-signals OpenCode. Omarchy signals OpenCode *before* hooks run, so the hook regenerates the palette and then restarts OpenCode.
+- The fish `opencode` wrapper (see [`fish.nix`](#fishnix)) also regenerates the theme before each launch, so the TUI always matches the desktop.
+- On non-Omarchy hosts no `tui.json`, generator, or hook is written, and OpenCode keeps its default theme.
+
+### Omarchy Spotify
+
+Controls the [Omarchy Spotify](https://github.com/stappmus/Omarchy-Spotify) shell plugin (`quickshell.spotify`) from the shell:
+
+- **`sp`** (fish function) — `sp` / `sp full` opens the full player, `sp mini` toggles the bar mini-player, `sp up` / `sp down` nudge Spotify's own volume by 5%. It is a no-op with a clear message on non-Omarchy hosts.
+- **`spotify-patch`** (fish alias) — runs [`scripts/reapply-omarchy-spotify-patches.sh`](scripts/reapply-omarchy-spotify-patches.sh), which reapplies the local plugin workaround after `omarchy plugin update`. Pass `--check` to report status, or `--restart` to reload the shell afterwards.
+
+**Why the workaround exists.** Omarchy 4.0.3+ strips `__sourceDir` from third-party plugin manifests and no longer exposes `shell.shellConfig` to them ([omacom/omarchy#10863](https://github.com/omacom/omarchy/issues/10863)). The upstream plugin still reads both, so it silently breaks: playback setup hangs on *"Checking local playback"*, and the `Super+Shift+M` shortcut falls through to `omarchy launch spotify` (which installs the full desktop client). The script patches two spots in the plugin's `Service.qml`:
+
+1. `pluginDir` falls back to `Qt.resolvedUrl(".")` so the plugin can locate its own bundled scripts.
+2. `configuredEntry()` reads settings from `shell.barConfig` instead of `shell.shellConfig`, so `shortcutPlayer` and the other plugin settings persist.
+
+The patches live only in the plugin checkout under `~/.config/omarchy/plugins/quickshell.spotify/` and are intentionally left **uncommitted**; reapply them with `spotify-patch` after any `omarchy plugin update`, or drop the script once the fix lands upstream.
+
 ### packages.nix
 
 Declarative, architecture-aware package list installed via `home.packages`. The shared set below is installed on both architectures; per-arch extras are appended with `lib.optionals config.host.isX86` / `config.host.isRpi`.
@@ -271,7 +300,7 @@ Declarative, architecture-aware package list installed via `home.packages`. The 
 | Editors | `neovim`, `code-server`, `opencode` |
 | Dev tools | `lazygit`, `tmux` |
 | Containers | `docker`, `docker-compose`, `jq` |
-| System info | `fastfetch`, `nitch`, `btop`, `clock-rs`, `smartmontools`, `exfatprogs` |
+| System info | `fastfetch`, `hyfetch`, `nitch`, `btop`, `clock-rs`, `smartmontools`, `exfatprogs` |
 | Media & graphics | `chafa`, `timg`, `mpv`, `ffmpeg`, `yt-dlp`, `yazi`, `pandoc` |
 | Networking & chat | `browsh`, `nchat`, `bluetuith`, `wifitui`, `tailscale`, `reddit-tui`, `reddix`, `discordo`, `wiki-tui`, `hackernews-tui`, `youtube-tui`, `smassh`, `gemini-cli`, `mangal` |
 | Obsidian TUIs | `basalt`, `obsitui`, `nixvim-editor` |
@@ -763,6 +792,7 @@ curl -d 'Summarize the last 3 git commits' http://localhost:8080
 | `edot` | Open dotfiles in Nixvim |
 | `ga` | `git add .` |
 | `yt` | Download a 4K video via `download-vid.sh` |
+| `spotify-patch` | Reapply the local Omarchy Spotify plugin workaround after `omarchy plugin update` (`--check`, `--restart`) |
 | `generate-ssh-key` | Generate an Ed25519 SSH key for a given email |
 | `bash ~/dotfiles/scripts/install-nix.sh` | Install Nix with --daemon on a fresh system |
 | `bash ~/dotfiles/scripts/download-vid.sh` | Download a 4K video from a URL using yt-dlp + ffmpeg |

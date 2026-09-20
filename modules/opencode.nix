@@ -27,7 +27,29 @@ in {
         };
       };
     };
+
+    # "omarchy" is generated at runtime from the active Omarchy theme by
+    # scripts/opencode-omarchy-theme.sh; do not manage opencode/themes here.
+    # Non-Omarchy hosts keep the default theme (no tui.json is written).
+    tui = lib.mkIf config.host.isOmarchy {
+      theme = "omarchy";
+    };
   };
 
-  xdg.configFile = skillConfigs;
+  xdg.configFile = skillConfigs // lib.optionalAttrs config.host.isOmarchy {
+    # Palette generator, invoked by the theme-set hook and the fish wrapper.
+    "opencode/omarchy-theme.sh".source = ../scripts/opencode-omarchy-theme.sh;
+
+    # Regenerate the opencode theme after every `omarchy theme set`, then
+    # re-signal opencode. Omarchy signals opencode *before* hooks run, so the
+    # file would otherwise still hold the previous palette.
+    "omarchy/hooks/theme-set.d/opencode-theme.hook".text = ''
+      #!/usr/bin/env bash
+      # Regenerate the opencode theme after every `omarchy theme set`, then
+      # re-signal opencode. Omarchy signals opencode *before* hooks run, so the
+      # file would otherwise still hold the previous palette.
+      bash "$HOME/.config/opencode/omarchy-theme.sh" || exit 0
+      command -v omarchy-restart-opencode >/dev/null 2>&1 && omarchy-restart-opencode || true
+    '';
+  };
 }

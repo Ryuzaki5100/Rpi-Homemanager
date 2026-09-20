@@ -5,7 +5,9 @@
     enable = true;
 
     interactiveShellInit = ''
-      source /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.fish
+      if test -e /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.fish
+          source /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.fish
+      end
 
       set -gx EDITOR nixvim-editor
 
@@ -29,9 +31,51 @@
       ga = "git add .";
       op = "opencode";
       yt = "~/dotfiles/scripts/download-vid.sh";
+      # Reapply the local Omarchy Spotify plugin patches after `omarchy plugin
+      # update` (idempotent; self-skips where the plugin is not installed).
+      spotify-patch = "bash ~/dotfiles/scripts/reapply-omarchy-spotify-patches.sh";
     };
 
     functions = {
+      # Refresh the opencode theme from the active Omarchy palette, then
+      # launch the real binary. `op` (alias) resolves here too.
+      opencode = {
+        description = "Launch opencode with the Omarchy theme refreshed";
+        body = ''
+          if type -q bash; and test -r $HOME/.config/opencode/omarchy-theme.sh
+              bash $HOME/.config/opencode/omarchy-theme.sh >/dev/null 2>&1
+          end
+          command opencode $argv
+        '';
+      };
+
+      # Control the Omarchy Spotify shell plugin. Omarchy-only: on other hosts
+      # (e.g. the Raspberry Pi) it prints a clear message instead of failing.
+      #   sp / sp full  open the full player
+      #   sp mini       toggle the bar mini-player
+      #   sp up/down    nudge Spotify's own volume by 5%
+      sp = {
+        description = "Control Omarchy Spotify";
+        body = ''
+          if not command -q omarchy
+            echo "sp: Omarchy Spotify is only available on Omarchy" >&2
+            return 1
+          end
+          set -l action toggleFullPlayer
+          switch "$argv[1]"
+            case mini
+              set action toggleMiniPlayer
+            case full
+              set action toggleFullPlayer
+            case up
+              set action volumeUp
+            case down
+              set action volumeDown
+          end
+          omarchy shell -q quickshell.spotify.player $action
+        '';
+      };
+
       generate-ssh-key = {
         body = ''
           read -P "Enter your email: " email

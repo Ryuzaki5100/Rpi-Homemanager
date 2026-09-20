@@ -27,6 +27,7 @@ let
 
     # System info
     fastfetch
+    hyfetch
     nitch
     btop
     clock-rs

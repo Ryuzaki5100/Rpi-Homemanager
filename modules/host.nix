@@ -40,5 +40,12 @@ in
       readOnly = true;
       description = "True on x86_64-linux laptops and desktops.";
     };
+
+    isOmarchy = lib.mkOption {
+      type = lib.types.bool;
+      default = builtins.pathExists /usr/share/omarchy/bin/omarchy-theme-set;
+      readOnly = true;
+      description = "True when Omarchy is installed on the current host.";
+    };
   };
 }
