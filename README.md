@@ -445,6 +445,18 @@ Builds [obsitui](https://github.com/atr0t0s/obsitui) — a terminal UI for brows
 > **On a truly fresh system without Nix**, run `bash ~/dotfiles/scripts/install-nix.sh` first
 > to install Nix with `--daemon` mode, then log out and back in before proceeding.
 
+> **Troubleshooting — `error: opening file "/nix/store": No such file or directory`**
+> The Nix store was never initialized. This happens with some distro packages
+> (notably Arch's `nix`), which install the binaries and daemon but skip
+> `nix-store --init`. Fix it once with:
+>
+> ```bash
+> nix-store --init        # add sudo if the daemon is not running
+> ```
+>
+> `scripts/init-home-manager.sh` and `scripts/init-filebrowser.sh` now detect
+> and initialize a missing store automatically.
+
 ### Installation
 
 **On an existing Home Manager setup:**

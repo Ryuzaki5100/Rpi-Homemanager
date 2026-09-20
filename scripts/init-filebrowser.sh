@@ -27,8 +27,20 @@ has_cmd() { command -v "$1" >/dev/null 2>&1; }
 if ! has_cmd nix; then
     die "Nix is not installed. Run first: scripts/install-nix.sh"
 fi
+
+# Distro packages (e.g. Arch's `nix`) can ship the daemon without ever running
+# `nix-store --init`; the first Nix command then fails with
+#   error: opening file "/nix/store": No such file or directory
+if [ ! -d /nix/store ]; then
+    say "Nix store is missing; initializing /nix/store..."
+    if ! nix-store --init 2>/dev/null; then
+        sudo nix-store --init
+    fi
+fi
+
 if ! grep -q "^experimental-features = .*nix-command.*flakes" /etc/nix/nix.conf 2>/dev/null; then
     say "Enabling Nix flakes..."
+    sudo mkdir -p /etc/nix
     echo "experimental-features = nix-command flakes" | sudo tee -a /etc/nix/nix.conf >/dev/null
 fi
 
