@@ -12,6 +12,8 @@ set -euo pipefail
 
 # Default to this script's own repo (works regardless of clone location).
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+. "$SCRIPT_DIR/lib/common.sh"
 DOTFILES="${DOTFILES:-$(dirname "$SCRIPT_DIR")}"
 DB="$HOME/.config/filebrowser/filebrowser.db"
 USERNAME="${FILEBROWSER_USERNAME:-admin}"
@@ -48,9 +50,9 @@ say "Applying Home Manager configuration from $DOTFILES"
 cd "$DOTFILES"
 # --impure lets the flake auto-detect the host architecture and user.
 if has_cmd home-manager; then
-    home-manager switch --flake .#$(whoami) --impure
+    home-manager switch --flake ".#$(whoami)" --impure
 else
-    nix run github:nix-community/home-manager -- switch --flake .#$(whoami) --impure
+    nix run github:nix-community/home-manager -- switch --flake ".#$(whoami)" --impure
 fi
 
 # --- Password -----------------------------------------------------------------
@@ -124,7 +126,7 @@ systemctl --user enable filebrowser.service >/dev/null 2>&1 || true
 # --- Report -----------------------------------------------------------------
 sleep 2
 if curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/ | grep -q 200; then
-    IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
+    IP="$(host_ip)"
     cat <<EOF
 
 ==> Filebrowser is ready!

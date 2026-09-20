@@ -88,8 +88,22 @@ The same flake targets both the Raspberry Pi (`aarch64-linux`) and x86_64 laptop
 3. **Architecture-conditional config** — hardware and package differences are gated on `config.host.*`:
    - **Immich**: `/dev/video19` passthrough and `IMMICH_HW_ACCEL_ENABLED=true` are Pi-only; x86 gets `IMMICH_HW_ACCEL_ENABLED=false` and no device passthrough (a missing device would stop the container from starting).
    - **Packages**: `localsend` is installed on x86 only — its Flutter dependency (`aapt`) has no `aarch64-linux` build.
-   - **Pi-only scripts** (`setup-rpi-usb-gadget.sh`, and the Pi-specific parts of `setup-wayvnc.sh`/`init-setup-hdd.sh`) detect the architecture/device and skip cleanly on x86 instead of failing.
+   - **Shell scripts**: all scripts are CPU-architecture agnostic. They share [`scripts/lib/common.sh`](scripts/lib/common.sh), which detects the host at runtime (`ARCH`, `IS_X86`, `IS_ARM`, `IS_RPI`) and provides `host_ip`/`have`/`require_rpi` helpers. Pi-only helpers (`setup-rpi-usb-gadget.sh`) call `require_rpi` and skip cleanly elsewhere; `setup-wayvnc.sh` passes `--gpu` only on ARM.
    - **Samba setup** detects `apt`/`pacman`/`dnf` and the distro's `smbd`/`smb` service name, so it works on Raspberry Pi OS, Arch and Fedora.
+
+   Per-script architecture behaviour:
+
+   | Script | Architecture behaviour |
+   |---|---|
+   | `lib/common.sh` | Runtime detection: `ARCH`, `IS_X86`, `IS_ARM`, `IS_RPI`, `host_ip`, `have`, `require_rpi` |
+   | `setup-rpi-usb-gadget.sh` | Pi-only (`require_rpi`); skips on x86/other ARM |
+   | `setup-wayvnc.sh` | Portable; adds `--gpu` only on ARM, resolution overridable via `RES_*` |
+   | `init-setup-hdd.sh` | Portable; drive selected by `HDD_UUID` (default the Pi's HDD) |
+   | `init-setup-samba` | Portable; `apt`/`pacman`/`dnf`, `smbd`/`smb` |
+   | `setup-immich.sh` | Portable; arch-aware compose comes from `modules/immich.nix` |
+   | `init-home-manager.sh`, `init-filebrowser.sh` | Portable; auto-init the Nix store, pass `--impure` |
+   | `install-nix.sh` | Portable; official installer auto-detects the CPU |
+   | `add-subtitles.sh`, `backup-drive.sh`, `download-vid.sh`, `opencode-serve.sh`, `samba-recycle-restore.sh`, `sync-to-ssd.sh`, `setup-firecrawl.sh`, `setup-gmail-mcp.sh`, `setup-tailscale.sh`, `*.py` | Portable (no architecture assumptions) |
 
 ### Dependencies
 
@@ -135,6 +149,8 @@ dotfiles/
 │   ├── obsitui.nix        # Obsidian TUI from source (npm)
 │   └── srl-tui.nix        # Spaced-repetition flashcard TUI (rust)
 ├── scripts/
+│   ├── lib/
+│   │   └── common.sh          # Shared arch detection + host_ip helper (sourced by scripts)
 │   ├── add-subtitles.sh        # Embed an .srt into a video as a soft subtitle track
 │   ├── backup-drive.sh        # Rotating hardlink snapshot backup of a mount
 │   ├── gmail-mcp-auth.py      # Headless OAuth helper for Gmail MCP

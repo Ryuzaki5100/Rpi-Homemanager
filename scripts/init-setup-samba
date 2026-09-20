@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+. "$SCRIPT_DIR/lib/common.sh"
+
 SMB_CONF="/etc/samba/smb.conf"
 # Branding shown to Apple/Windows clients. Override for a non-Pi host:
 #   SMB_SERVER_NAME=myserver SMB_FRUIT_MODEL=MacSamba bash init-setup-samba
@@ -180,7 +184,7 @@ else
     echo "Warning: neither smbd.service nor smb.service found; start Samba manually." >&2
 fi
 
-ipaddr=$(hostname -I | awk '{print $1}')
+ipaddr="$(host_ip)"
 echo "=== Samba setup complete! ==="
 echo "Connect from iPad via: smb://$ipaddr/$username"
 echo "Also available: smb://$ipaddr/hdd and smb://$ipaddr/ssd"

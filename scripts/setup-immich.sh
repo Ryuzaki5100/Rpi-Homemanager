@@ -5,17 +5,11 @@ set -euo pipefail
 # Ensures the Docker daemon is running (the CLI comes from nixpkgs via Home
 # Manager). The compose file itself is architecture-aware; see modules/immich.nix.
 
-IMMICH_DIR="$HOME/.config/immich"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+. "$SCRIPT_DIR/lib/common.sh"
 
-# Portable "first non-loopback IPv4" (hostname -I is a GNU extension).
-host_ip() {
-    local ip=""
-    ip="$(hostname -I 2>/dev/null | awk '{print $1}' || true)"
-    if [ -z "$ip" ]; then
-        ip="$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for (i=1;i<=NF;i++) if ($i=="src") {print $(i+1); exit}}' || true)"
-    fi
-    printf '%s\n' "$ip"
-}
+IMMICH_DIR="$HOME/.config/immich"
 
 echo "==> Checking for Docker daemon..."
 if ! docker info &>/dev/null; then

@@ -6,15 +6,13 @@ if [ "$EUID" -eq 0 ]; then
     exit 1
 fi
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+. "$SCRIPT_DIR/lib/common.sh"
+
 # The USB gadget is implemented by the Broadcom dwc2 controller, so this only
 # applies to a Raspberry Pi. Skip cleanly on x86 laptops/desktops.
-ARCH="$(uname -m)"
-if [ "$ARCH" != "aarch64" ] && [ "$ARCH" != "armv7l" ]; then
-    echo "setup-rpi-usb-gadget: Raspberry Pi USB gadget is unavailable on $ARCH."
-    echo "    This script configures the Pi's dwc2/g_ether USB peripheral mode."
-    echo "    Skipping on this host."
-    exit 0
-fi
+require_rpi "$(basename "$0")" || exit 0
 
 # Raspberry Pi OS moved the boot partition from /boot to /boot/firmware.
 if [ -d /boot/firmware ]; then

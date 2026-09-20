@@ -9,10 +9,13 @@ REFRESH="${REFRESH:-60}"
 VNC_PASSWD=""
 VNC_SERVICE_FILE="/etc/systemd/system/wayvnc-session.service"
 
-# The Pi GPU (V4L2/DRM) path is Pi-only; x86 uses the regular wlroots backend.
-ARCH="$(uname -m)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+. "$SCRIPT_DIR/lib/common.sh"
+
+# The Pi GPU (V4L2/DRM) path is ARM-only; x86 uses the regular wlroots backend.
 WAYVNC_GPU_FLAG=""
-if [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "armv7l" ]; then
+if [ "$IS_ARM" = true ]; then
     WAYVNC_GPU_FLAG="--gpu"
 fi
 
@@ -129,7 +132,7 @@ echo "============================================"
 echo "  WayVNC setup complete!"
 echo "  Resolution: ${RES_WIDTH}x${RES_HEIGHT} @ ${REFRESH}Hz"
 echo "  Connect from iPad RealVNC Viewer:"
-echo "    Address:  $(hostname -I | awk '{print $1}'):5900"
+echo "    Address:  $(host_ip):5900"
 echo "    Username: $USER"
 echo "    Password: (the one you entered)"
 echo "============================================"

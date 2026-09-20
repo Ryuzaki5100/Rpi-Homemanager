@@ -37,7 +37,7 @@ port_pids() {
 
 if [ -n "$(port_pids)" ]; then
     echo "==> Port ${OPENCODE_PORT} in use; killing old process..."
-    port_pids | xargs -r kill 2>/dev/null || true
+    port_pids | xargs kill 2>/dev/null || true
     sleep 1
 fi
 
@@ -45,7 +45,7 @@ echo "==> Starting opencode serve on 0.0.0.0:${OPENCODE_PORT}..."
 opencode serve --hostname 0.0.0.0 --port "$OPENCODE_PORT" &
 OPENCODE_PID=$!
 
-for i in $(seq 1 10); do
+for _ in $(seq 1 10); do
     if curl -sf "http://127.0.0.1:${OPENCODE_PORT}/global/health" &>/dev/null; then
         break
     fi
