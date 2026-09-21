@@ -93,7 +93,7 @@ The same flake targets both the Raspberry Pi (`aarch64-linux`) and x86_64 laptop
    - **Immich**: `/dev/video19` passthrough and `IMMICH_HW_ACCEL_ENABLED=true` are Pi-only; x86 gets `IMMICH_HW_ACCEL_ENABLED=false` and no device passthrough (a missing device would stop the container from starting).
    - **Packages**: `localsend` is installed on x86 only — its Flutter dependency (`aapt`) has no `aarch64-linux` build.
    - **Omarchy** (`host.isOmarchy`): the OpenCode theme integration (`opencode.nix`) and the Omarchy Spotify fish functions are gated on Omarchy being present, so the Raspberry Pi and other non-Omarchy hosts evaluate and build cleanly without them.
-   - **Shell scripts**: all scripts are CPU-architecture agnostic. They share [`scripts/lib/common.sh`](scripts/lib/common.sh), which detects the host at runtime (`ARCH`, `IS_X86`, `IS_ARM`, `IS_RPI`) and provides `host_ip`/`have`/`require_rpi` helpers. Pi-only helpers (`setup-rpi-usb-gadget.sh`) call `require_rpi` and skip cleanly elsewhere; `setup-wayvnc.sh` passes `--gpu` only on ARM.
+   - **Shell scripts**: all scripts are CPU-architecture agnostic. They share [`scripts/lib/common.sh`](scripts/lib/common.sh), which detects the host at runtime (`ARCH`, `IS_X86`, `IS_ARM`, `IS_RPI`) and provides `host_ip`/`have`/`require_rpi` helpers. Pi-only helpers (`setup-rpi-usb-gadget.sh`) call `require_rpi` and skip cleanly elsewhere; `setup-wayvnc.sh` picks an Omarchy/Hyprland user-service profile or a Pi system-service profile at runtime (`--gpu` and `RES_*` only on ARM).
    - **Samba setup** detects `apt`/`pacman`/`dnf` and the distro's `smbd`/`smb` service name, so it works on Raspberry Pi OS, Arch and Fedora.
 
    Per-script architecture behaviour:
@@ -102,7 +102,7 @@ The same flake targets both the Raspberry Pi (`aarch64-linux`) and x86_64 laptop
    |---|---|
    | `lib/common.sh` | Runtime detection: `ARCH`, `IS_X86`, `IS_ARM`, `IS_RPI`, `host_ip`, `have`, `require_rpi` |
    | `setup-rpi-usb-gadget.sh` | Pi-only (`require_rpi`); skips on x86/other ARM |
-   | `setup-wayvnc.sh` | Portable; adds `--gpu` only on ARM, resolution overridable via `RES_*` |
+   | `setup-wayvnc.sh` | Two profiles: Omarchy/Hyprland (systemd user service, native resolution) and Pi (system service, `--gpu` + `RES_*` forced mode) |
    | `init-setup-hdd.sh` | Portable; drive selected by `HDD_UUID` (default the Pi's HDD) |
    | `init-setup-samba` | Portable; `apt`/`pacman`/`dnf`, `smbd`/`smb` |
    | `setup-immich.sh` | Portable; arch-aware compose comes from `modules/immich.nix` |
@@ -175,7 +175,7 @@ dotfiles/
 │   ├── setup-immich.sh        # Bootstrap Docker daemon and start Immich
 │   ├── setup-rpi-usb-gadget.sh # Configure RPi as USB ethernet gadget (skips on x86)
 │   ├── setup-tailscale.sh     # Tailscale auth, status check, and systemd enable
-│   ├── setup-wayvnc.sh        # WayVNC VNC server (Pi GPU flag only on aarch64; RES_* overridable)
+│   ├── setup-wayvnc.sh        # WayVNC server: Omarchy/Hyprland user service or Pi system service
 │   └── sync-to-ssd.sh         # Sync Immich albums to an external drive
 └── skills/
     ├── batch-resume-tailor/ # OpenCode skill: batch tailor resumes from job posting URLs
@@ -680,6 +680,44 @@ The script will:
 3. Verify the connection via `tailscale status`
 4. Create and enable a systemd `tailscaled.service` unit for auto-start on boot
 5. Write a `sudoers.d` file ensuring Nix binaries are on `secure_path` for sudo commands
+
+It is idempotent: re-running it stops any stray, manually-started `tailscaled` first, then lets the systemd unit own the control socket. If you ever see `safesocket.Listen: ... address already in use` in `journalctl -u tailscaled`, just run it again.
+
+> The nix `tailscaled` is a wrapper script, so the running process is named `.tailscaled-wrapped` — `pgrep -x tailscaled` never matches it. The script matches on the command line (`bin/tailscaled`) instead, which is why a stray daemon no longer survives re-runs.
+
+### VNC from an iPad (WayVNC)
+
+Omarchy runs Wayland (Hyprland), so X11 VNC servers like `x11vnc` don't work. [`setup-wayvnc.sh`](scripts/setup-wayvnc.sh) uses **wayvnc**, which mirrors the live session; the host profile is detected at runtime:
+
+| Host | Service | Config / keys |
+|---|---|---|
+| Omarchy / Arch + Hyprland | systemd **user** service `wayvnc.service`, bound to `graphical-session.target` | `~/.config/wayvnc/` (mode 600, never committed) |
+| Raspberry Pi OS | systemd **system** service `wayvnc-session.service` | `/etc/wayvnc/` + `~/.config/wayvnc/config` |
+
+```bash
+bash ~/dotfiles/scripts/setup-wayvnc.sh
+```
+
+The script will:
+1. Install `wayvnc` (`omarchy pkg add`, then `pacman`, then `apt`)
+2. Prompt for a VNC password (or read `VNC_PASSWORD`)
+3. Generate TLS + RSA-AES keys (RSA-AES is what RealVNC Viewer negotiates)
+4. Write the config and service unit, then enable and start it
+5. Open the VNC port on `tailscale0` if `ufw`/`firewalld` is active (never on the LAN)
+
+Connect from **RealVNC Viewer** on the iPad to `<tailscale-ip>:5900` (override with `VNC_PORT`), using your username and the password you set. Because access is over Tailscale, binding to `0.0.0.0` is fine — don't expose port 5900 publicly.
+
+> A host firewall with a default DROP policy (ufw on Omarchy) will block the tailnet port silently. The script adds `ufw allow in on tailscale0 to any port 5900 proto tcp`; add it manually if you changed `VNC_PORT` or the rule was removed.
+
+Managing the Omarchy service:
+
+```bash
+systemctl --user status wayvnc.service
+systemctl --user restart wayvnc.service
+journalctl --user -u wayvnc.service -f
+```
+
+> On the Pi the same unit is system-wide (`sudo systemctl restart wayvnc-session`). `RES_WIDTH`/`RES_HEIGHT`/`REFRESH` only apply to the Pi profile (forced iPad-panel mode).
 
 ### Immich Setup
 

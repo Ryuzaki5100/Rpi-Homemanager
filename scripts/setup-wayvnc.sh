@@ -1,71 +1,293 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Defaults match the iPad panel used with the Pi. Override on other hosts, e.g.
-#   RES_WIDTH=1920 RES_HEIGHT=1080 REFRESH=60 bash setup-wayvnc.sh
+# setup-wayvnc.sh -- expose the current Wayland desktop over VNC so an iPad
+# (RealVNC Viewer) can drive it, typically across a Tailscale tailnet.
+#
+# The host profile is detected at runtime:
+#
+#   Omarchy / Arch + Hyprland (x86 laptops & desktops)
+#     wayvnc runs as a systemd *user* service bound to graphical-session.target
+#     and mirrors the live session at its native resolution. Config, TLS and
+#     RSA keys live under ~/.config/wayvnc (mode 600), so no secret is ever
+#     committed to this repo. The package comes from `omarchy pkg add` (or
+#     pacman on plain Arch).
+#
+#   Raspberry Pi OS / Debian + labwc (the historic Pi target)
+#     wayvnc runs as a system service, optionally forcing the iPad panel mode
+#     with wlr-randr, and keeps its keys under /etc/wayvnc. RealVNC's
+#     vncserver-x11-serviced is stopped/disabled to avoid a port clash.
+#
+# Usage:
+#   bash scripts/setup-wayvnc.sh
+#
+# Overrides:
+#   VNC_PORT=5900                 TCP port (default 5900)
+#   VNC_PASSWORD=...              skip the interactive prompt
+#   RES_WIDTH/RES_HEIGHT/REFRESH  Pi-only forced mode (default iPad panel)
+
+VNC_PORT="${VNC_PORT:-5900}"
+
+# Pi-only forced mode; matches the iPad panel used with the Pi.
 RES_WIDTH="${RES_WIDTH:-2388}"
 RES_HEIGHT="${RES_HEIGHT:-1668}"
 REFRESH="${REFRESH:-60}"
+
 VNC_PASSWD=""
-VNC_SERVICE_FILE="/etc/systemd/system/wayvnc-session.service"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/common.sh
 . "$SCRIPT_DIR/lib/common.sh"
-
-# The Pi GPU (V4L2/DRM) path is ARM-only; x86 uses the regular wlroots backend.
-WAYVNC_GPU_FLAG=""
-if [ "$IS_ARM" = true ]; then
-    WAYVNC_GPU_FLAG="--gpu"
-fi
 
 if [ "$EUID" -eq 0 ]; then
     echo "Do not run as root. This script uses sudo when needed."
     exit 1
 fi
 
-echo "==> Disabling RealVNC (if present)..."
-if systemctl is-enabled vncserver-x11-serviced &>/dev/null; then
-    sudo systemctl stop vncserver-x11-serviced 2>/dev/null || true
-    sudo systemctl disable vncserver-x11-serviced 2>/dev/null || true
-    echo "    RealVNC stopped and disabled."
-else
-    echo "    Not found or already disabled, skipping."
-fi
+# --- Shared helpers -----------------------------------------------------------
 
-echo "==> Setting VNC password..."
-while true; do
-    read -rsp "    Enter VNC password: " pw1
-    echo
-    read -rsp "    Confirm VNC password: " pw2
-    echo
-    if [ "$pw1" != "$pw2" ]; then
-        echo "    Passwords do not match. Try again."
-    elif [ ${#pw1} -lt 4 ]; then
-        echo "    Password must be at least 4 characters. Try again."
-    else
-        VNC_PASSWD="$pw1"
-        break
+prompt_password() {
+    if [ -n "${VNC_PASSWORD:-}" ]; then
+        VNC_PASSWD="$VNC_PASSWORD"
+        return 0
     fi
-done
+    while true; do
+        read -rsp "    Enter VNC password: " pw1
+        echo
+        read -rsp "    Confirm VNC password: " pw2
+        echo
+        if [ "$pw1" != "$pw2" ]; then
+            echo "    Passwords do not match. Try again."
+        elif [ ${#pw1} -lt 4 ]; then
+            echo "    Password must be at least 4 characters. Try again."
+        else
+            VNC_PASSWD="$pw1"
+            break
+        fi
+    done
+}
 
-echo "==> Creating wayvnc config..."
-mkdir -p "$HOME/.config/wayvnc"
+print_summary() {
+    local target="${1:-}"
+    if [ -z "$target" ] && have tailscale; then
+        target="$(tailscale ip -4 2>/dev/null | head -1)"
+    fi
+    target="${target:-$(host_ip)}"
+    echo ""
+    echo "============================================"
+    echo "  WayVNC setup complete!"
+    echo "  Connect from iPad RealVNC Viewer:"
+    echo "    Address:  ${target}:${VNC_PORT}"
+    echo "    Username: ${USER}"
+    echo "    Password: (the one you entered)"
+    echo "============================================"
+}
 
-OUTPUT_NAME=$(sudo -u "$USER" XDG_RUNTIME_DIR="/run/user/$(id -u)" WAYLAND_DISPLAY=wayland-0 wlr-randr 2>/dev/null | head -1 | awk '{print $1}' || true)
-if [ -z "$OUTPUT_NAME" ]; then
-    echo "    Warning: Could not detect Wayland output name. Using 'NOOP-1'."
-    OUTPUT_NAME="NOOP-1"
-fi
+# --- Wayland profile (Omarchy / Arch + Hyprland) ------------------------------
 
-# Only force a custom mode when wlr-randr is actually installed; otherwise the
-# service would fail on hosts without it (e.g. a plain x86 desktop).
-RANDR_CMD="/usr/bin/wlr-randr --output $OUTPUT_NAME --custom-mode ${RES_WIDTH}x${RES_HEIGHT}@${REFRESH}"
-if [ ! -x /usr/bin/wlr-randr ]; then
-    RANDR_CMD="/bin/true"
-fi
+wayland_install_wayvnc() {
+    if have wayvnc; then
+        echo "    Already installed: $(command -v wayvnc)"
+        return 0
+    fi
+    if have omarchy; then
+        omarchy pkg add wayvnc
+    elif have pacman; then
+        sudo pacman -S --needed --noconfirm wayvnc
+    else
+        echo "    Could not find a package manager. Install 'wayvnc' manually, then re-run."
+        return 1
+    fi
+}
 
-cat > "$HOME/.config/wayvnc/config" << CONFIGEOF
+wayland_generate_keys() {
+    local dir="$1"
+
+    if [ ! -f "$dir/tls_key.pem" ] || [ ! -f "$dir/tls_cert.pem" ]; then
+        echo "    Generating TLS key/certificate..."
+        openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:secp384r1 -sha384 \
+            -days 3650 -nodes \
+            -keyout "$dir/tls_key.pem" -out "$dir/tls_cert.pem" \
+            -subj "/CN=localhost" \
+            -addext "subjectAltName=DNS:localhost,IP:127.0.0.1" 2>/dev/null
+    else
+        echo "    TLS key/certificate already present, keeping."
+    fi
+
+    if [ ! -f "$dir/rsa_key.pem" ]; then
+        echo "    Generating RSA-AES key (this is what RealVNC Viewer negotiates)..."
+        ssh-keygen -m pem -f "$dir/rsa_key.pem" -t rsa -N "" >/dev/null
+    else
+        echo "    RSA-AES key already present, keeping."
+    fi
+
+    chmod 600 "$dir"/*.pem
+}
+
+wayland_write_config() {
+    local dir="$1"
+    cat > "$dir/config" <<CONFIGEOF
+# Generated by dotfiles/scripts/setup-wayvnc.sh.
+# Contains a cleartext password -- keep mode 600 and out of git.
+use_relative_paths=true
+address=0.0.0.0
+port=${VNC_PORT}
+enable_auth=true
+enable_pam=false
+username=${USER}
+password=${VNC_PASSWD}
+private_key_file=tls_key.pem
+certificate_file=tls_cert.pem
+rsa_private_key_file=rsa_key.pem
+CONFIGEOF
+    chmod 600 "$dir/config"
+}
+
+wayland_write_unit() {
+    local path="$1" bin="$2"
+    cat > "$path" <<UNITEOF
+[Unit]
+Description=WayVNC VNC server
+Documentation=man:wayvnc(1)
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=${bin} --config %h/.config/wayvnc/config
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=graphical-session.target
+UNITEOF
+}
+
+wayland_open_firewall() {
+    # Tailscale traffic arrives on tailscale0. A host firewall with a default
+    # DROP policy (e.g. ufw) silently blocks the VNC port without an explicit
+    # allow, so open it on the tailnet interface only -- never on the LAN.
+    if have ufw && sudo ufw status 2>/dev/null | grep -q '^Status: active'; then
+        echo "==> Allowing VNC on tailscale0 (ufw)..."
+        sudo ufw allow in on tailscale0 to any port "$VNC_PORT" proto tcp >/dev/null
+        sudo ufw reload >/dev/null 2>&1 || true
+    elif have firewall-cmd && systemctl is-active --quiet firewalld; then
+        echo "==> Trusting tailscale0 (firewalld)..."
+        sudo firewall-cmd --permanent --zone=trusted --add-interface=tailscale0 >/dev/null 2>&1 || true
+        sudo firewall-cmd --reload >/dev/null 2>&1 || true
+    else
+        echo "==> No active ufw/firewalld detected; skipping firewall rule."
+    fi
+}
+
+setup_wayland() {
+    echo "==> Host profile: Wayland desktop (Omarchy / Arch + Hyprland)"
+
+    echo "==> Ensuring wayvnc is installed..."
+    wayland_install_wayvnc
+    local wayvnc_bin
+    wayvnc_bin="$(command -v wayvnc)"
+
+    echo "==> Setting VNC password..."
+    prompt_password
+
+    local cfg_dir="$HOME/.config/wayvnc"
+    local unit_dir="$HOME/.config/systemd/user"
+    mkdir -p "$cfg_dir" "$unit_dir"
+
+    echo "==> Preparing keys in $cfg_dir..."
+    wayland_generate_keys "$cfg_dir"
+
+    echo "==> Writing $cfg_dir/config..."
+    wayland_write_config "$cfg_dir"
+
+    echo "==> Writing systemd user service $unit_dir/wayvnc.service..."
+    wayland_write_unit "$unit_dir/wayvnc.service" "$wayvnc_bin"
+
+    echo "==> Enabling and starting wayvnc.service (user)..."
+    systemctl --user daemon-reload
+    systemctl --user enable --now wayvnc.service
+
+    wayland_open_firewall
+
+    sleep 1
+    if systemctl --user is-active --quiet wayvnc.service; then
+        echo "    wayvnc.service is active."
+    else
+        echo "    WARNING: wayvnc.service is not active. Recent logs:"
+        systemctl --user --no-pager -n 20 status wayvnc.service || true
+    fi
+
+    print_summary
+}
+
+# --- Raspberry Pi profile (Debian + labwc) ------------------------------------
+
+rpi_generate_keys() {
+    if [ -f /etc/wayvnc/rsa_key.pem ] && [ -f /etc/wayvnc/tls_key.pem ]; then
+        echo "    Keys already exist, skipping."
+        return 0
+    fi
+
+    if [ -x /usr/sbin/wayvnc-generate-keys.sh ]; then
+        sudo /usr/sbin/wayvnc-generate-keys.sh
+    elif have wayvnc-generate-keys.sh; then
+        sudo "$(command -v wayvnc-generate-keys.sh)"
+    else
+        echo "    wayvnc-generate-keys.sh not found; generating keys with openssl/ssh-keygen."
+        sudo mkdir -p /etc/wayvnc
+        sudo openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:secp384r1 -sha384 \
+            -days 3650 -nodes \
+            -keyout /etc/wayvnc/tls_key.pem -out /etc/wayvnc/tls_cert.pem \
+            -subj "/CN=localhost" 2>/dev/null
+        sudo ssh-keygen -m pem -f /etc/wayvnc/rsa_key.pem -t rsa -N "" >/dev/null
+    fi
+
+    if sudo ls /etc/wayvnc/*.pem >/dev/null 2>&1; then
+        sudo chmod 644 /etc/wayvnc/*.pem
+        echo "    Keys generated."
+    fi
+}
+
+setup_rpi() {
+    echo "==> Host profile: Raspberry Pi OS (Debian)"
+
+    echo "==> Disabling RealVNC (if present)..."
+    if systemctl is-enabled vncserver-x11-serviced &>/dev/null; then
+        sudo systemctl stop vncserver-x11-serviced 2>/dev/null || true
+        sudo systemctl disable vncserver-x11-serviced 2>/dev/null || true
+        echo "    RealVNC stopped and disabled."
+    else
+        echo "    Not found or already disabled, skipping."
+    fi
+
+    echo "==> Ensuring wayvnc is installed..."
+    if ! have wayvnc; then
+        sudo apt-get update
+        sudo apt-get install -y wayvnc
+    fi
+
+    echo "==> Setting VNC password..."
+    prompt_password
+
+    echo "==> Creating wayvnc config..."
+    mkdir -p "$HOME/.config/wayvnc"
+
+    OUTPUT_NAME=$(XDG_RUNTIME_DIR="/run/user/$(id -u)" WAYLAND_DISPLAY=wayland-0 \
+        wlr-randr 2>/dev/null | head -1 | awk '{print $1}' || true)
+    if [ -z "$OUTPUT_NAME" ]; then
+        echo "    Warning: Could not detect Wayland output name. Using 'NOOP-1'."
+        OUTPUT_NAME="NOOP-1"
+    fi
+
+    # Only force a custom mode when wlr-randr is actually installed; otherwise the
+    # service would fail on hosts without it.
+    RANDR_CMD="/usr/bin/wlr-randr --output $OUTPUT_NAME --custom-mode ${RES_WIDTH}x${RES_HEIGHT}@${REFRESH}"
+    if [ ! -x /usr/bin/wlr-randr ]; then
+        RANDR_CMD="/bin/true"
+    fi
+
+    cat > "$HOME/.config/wayvnc/config" <<CONFIGEOF
 address=0.0.0.0
 enable_auth=true
 username=$USER
@@ -76,32 +298,21 @@ certificate_file=/etc/wayvnc/tls_cert.pem
 rsa_private_key_file=/etc/wayvnc/rsa_key.pem
 use_relative_paths=false
 CONFIGEOF
-echo "    Config written to $HOME/.config/wayvnc/config"
+    echo "    Config written to $HOME/.config/wayvnc/config"
 
-echo "==> Generating TLS/RSA keys..."
-if [ ! -f /etc/wayvnc/rsa_key.pem ] || [ ! -f /etc/wayvnc/tls_key.pem ]; then
-    if [ -x /usr/sbin/wayvnc-generate-keys.sh ]; then
-        sudo /usr/sbin/wayvnc-generate-keys.sh
-    elif command -v wayvnc-generate-keys.sh >/dev/null 2>&1; then
-        sudo "$(command -v wayvnc-generate-keys.sh)"
-    else
-        echo "    Warning: wayvnc-generate-keys.sh not found; skipping TLS key generation."
-        echo "    Install it (Debian/RPi OS) or generate keys manually under /etc/wayvnc/."
+    echo "==> Generating TLS/RSA keys..."
+    rpi_generate_keys
+
+    echo "==> Creating systemd service..."
+    local wayvnc_bin
+    wayvnc_bin="$(command -v wayvnc)"
+    # The Pi GPU (V4L2/DRM) path is ARM-only; use --gpu there.
+    local gpu_flag=""
+    if [ "$IS_ARM" = true ]; then
+        gpu_flag="--gpu"
     fi
-    if ls /etc/wayvnc/*.pem >/dev/null 2>&1; then
-        sudo chmod 644 /etc/wayvnc/*.pem
-        echo "    Keys generated."
-    fi
-else
-    echo "    Keys already exist, skipping."
-fi
 
-echo "==> Creating systemd service..."
-if [ -f "$VNC_SERVICE_FILE" ]; then
-    echo "    Service file already exists, overwriting..."
-fi
-
-sudo tee "$VNC_SERVICE_FILE" > /dev/null << SERVICEEOF
+    sudo tee /etc/systemd/system/wayvnc-session.service >/dev/null <<SERVICEEOF
 [Unit]
 Description=WayVNC (user session)
 Documentation=man:wayvnc
@@ -114,25 +325,30 @@ Environment=XDG_RUNTIME_DIR=/run/user/$(id -u)
 Environment=WAYLAND_DISPLAY=wayland-0
 ExecStartPre=/bin/sh -c 'i=0; while [ ! -S /run/user/$(id -u)/wayland-0 ] && [ \$i -lt 30 ]; do sleep 1; i=\$((i+1)); done; [ -S /run/user/$(id -u)/wayland-0 ]'
 ExecStartPre=$RANDR_CMD
-ExecStart=/usr/bin/wayvnc $WAYVNC_GPU_FLAG --config $HOME/.config/wayvnc/config
+ExecStart=$wayvnc_bin $gpu_flag --config $HOME/.config/wayvnc/config
 Restart=on-failure
 RestartSec=2
 
 [Install]
 WantedBy=multi-user.target
 SERVICEEOF
-echo "    Service written to $VNC_SERVICE_FILE"
+    echo "    Service written to /etc/systemd/system/wayvnc-session.service"
 
-echo "==> Enabling and starting service..."
-sudo systemctl daemon-reload
-sudo systemctl enable --now wayvnc-session
+    echo "==> Enabling and starting service..."
+    sudo systemctl daemon-reload
+    sudo systemctl enable --now wayvnc-session
 
-echo ""
-echo "============================================"
-echo "  WayVNC setup complete!"
-echo "  Resolution: ${RES_WIDTH}x${RES_HEIGHT} @ ${REFRESH}Hz"
-echo "  Connect from iPad RealVNC Viewer:"
-echo "    Address:  $(host_ip):5900"
-echo "    Username: $USER"
-echo "    Password: (the one you entered)"
-echo "============================================"
+    print_summary
+}
+
+# --- Dispatch -----------------------------------------------------------------
+
+if [ "$IS_RPI" = true ]; then
+    setup_rpi
+elif [ "${XDG_CURRENT_DESKTOP:-}" = "Hyprland" ] || [ -e /usr/share/omarchy/bin/omarchy-theme-set ]; then
+    setup_wayland
+else
+    echo "Unsupported host (arch=$ARCH, desktop=${XDG_CURRENT_DESKTOP:-none})."
+    echo "This script targets Omarchy/Hyprland and Raspberry Pi OS."
+    exit 1
+fi
