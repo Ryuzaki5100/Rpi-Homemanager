@@ -7,12 +7,19 @@
       url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    # GL/Vulkan driver wrapper for Nix packages on non-NixOS hosts
+    # (Omarchy/Arch has no /run/opengl-driver). Used to wrap mpv.
+    nixgl = {
+      url = "github:nix-community/nixGL";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
     {
       nixpkgs,
       home-manager,
+      nixgl,
       ...
     }:
     let
@@ -38,6 +45,7 @@
       pkgs' = import nixpkgs {
         inherit system;
         overlays = [
+          nixgl.overlays.default
           (final: prev: {
             srl-tui = prev.callPackage ./pkgs/srl-tui.nix { };
             gmail-mcp-auth = prev.callPackage ./pkgs/gmail-mcp-auth.nix { };

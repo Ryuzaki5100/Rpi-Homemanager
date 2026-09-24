@@ -13,6 +13,7 @@
     ./modules/env.nix
     ./modules/fish.nix
     ./modules/packages.nix
+    ./modules/mpv.nix
     ./modules/obsidian.nix
     ./modules/opencode.nix
     ./modules/gmail-mcp.nix
