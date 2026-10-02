@@ -19,6 +19,8 @@ in
     # Dev tools
     lazygit
     tmux
+    zellij
+    fzf
 
     # Containers
     docker
@@ -41,6 +43,9 @@ in
     yt-dlp
     yazi
     pandoc
+    dysk
+    foliate
+    nix-search-tv
     # localsend
 
     # Networking & chat
@@ -64,6 +69,7 @@ in
     # Obsidian TUIs
     basalt
     obsitui
+    glow
     nixvim-editor
 
     # Flashcards (SM-2 spaced repetition TUI)
@@ -72,6 +78,7 @@ in
     # Fun
     cmatrix
     posting
+    asciiquarium
 
     # Automation tools
     # openclaw
