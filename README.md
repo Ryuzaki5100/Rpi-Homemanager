@@ -21,6 +21,7 @@ Personal Home Manager configuration for a terminal-centric workflow on `aarch64-
   - [firecrawl.nix](#firecrawlnix)
   - [immich.nix](#immichnix)
   - [obsidian.nix](#obsidiannix)
+  - [glow.nix](#glownix)
 - [Skills](#skills)
 - [Custom Packages](#custom-packages)
   - [nixvim-editor](#nixvim-editor)
@@ -47,8 +48,13 @@ flake.nix  ──►  home.nix  ──►  modules/*.nix
                       │
                       └── skills/
                             ├── batch-resume-tailor/SKILL.md
+                            ├── daily-prep-questions/SKILL.md
+                            ├── glow-theme-creator/SKILL.md
+                            ├── hld-problems-generator/SKILL.md
                             ├── single-resume-tailor/SKILL.md
                             ├── skill-creator/SKILL.md
+                            ├── system-design-tester/SKILL.md
+                            ├── system-design-tutor/SKILL.md
                             ├── update-docs/SKILL.md
                             └── yt-summarizer/SKILL.md
 ```
@@ -56,7 +62,7 @@ flake.nix  ──►  home.nix  ──►  modules/*.nix
 | Layer | Description |
 |---|---|
 | **`flake.nix`** | Entry point. Pins `nixpkgs` (nixos-unstable) and `home-manager`. Builds custom packages and passes them as `extraSpecialArgs` into the module tree. |
-| **`home.nix`** | Thin shim; imports all ten modules under `modules/`. Receives custom packages as extra arguments. On activation, symlinks `/mnt/hdd` to `~/hdd`. |
+| **`home.nix`** | Thin shim; imports all eleven modules under `modules/`. Receives custom packages as extra arguments. On activation, symlinks `/mnt/hdd` to `~/hdd`. |
 | **`modules/`** | Self-contained Nix files, each responsible for one concern. |
 | **`pkgs/`** | Custom package derivations exported both as flake outputs and installed in the Home Manager profile. |
 | **`skills/`** | OpenCode skill definitions (SKILL.md files) deployed via `xdg.configFile` symlinks. |
@@ -91,11 +97,14 @@ dotfiles/
 │   ├── firecrawl.nix      # Firecrawl MCP server config
 │   ├── filebrowser.nix    # Filebrowser web file manager (systemd user service)
 │   ├── fish.nix           # Fish shell config & aliases
+│   ├── glow.nix           # glow markdown themes & glow-set-theme picker
 │   ├── gmail-mcp.nix      # Gmail MCP auth packages
 │   ├── immich.nix         # Immich docker-compose config & env
 │   ├── obsidian.nix       # Obsidian vaults & Basalt config
 │   ├── opencode.nix       # OpenCode config & MCP settings
 │   └── packages.nix       # Declarative package list
+├── glow/
+│   └── themes/            # glamour v2 theme JSONs (retro-orange, gruvbox, nord, tokyo-night, catppuccin-mocha, dracula, blood-red)
 ├── pkgs/
 │   ├── gmail-mcp-auth.nix # Wrapper around gmail-mcp-auth.py (python + google-auth-oauthlib)
 │   ├── nixvim-editor.nix  # Thin wrapper around external Nixvim flake
@@ -122,8 +131,13 @@ dotfiles/
 │   └── sync-to-ssd.sh         # Sync Immich albums to an external drive
 └── skills/
     ├── batch-resume-tailor/ # OpenCode skill: batch tailor resumes from job posting URLs
+    ├── daily-prep-questions/ # OpenCode skill: daily no-repeat interview-prep set (LC/SD/behavioral/SQL/LLD)
+    ├── glow-theme-creator/ # OpenCode skill: build glow themes from a described vibe
+    ├── hld-problems-generator/ # OpenCode skill: synthesize HLD practice problems + EPUB
     ├── single-resume-tailor/ # OpenCode skill: ATS-optimized one-page resume from a JD
     ├── skill-creator/     # OpenCode skill: interactive skill creation wizard
+    ├── system-design-tester/ # OpenCode skill: generate timestamped SD test papers
+    ├── system-design-tutor/ # OpenCode skill: answer keys, grading, and reasoning for SD tests
     ├── update-docs/       # OpenCode skill: auto-update docs from git changes
     └── yt-summarizer/     # OpenCode skill: summarize YouTube videos, export to markdown/EPUB
 ```
@@ -208,13 +222,13 @@ Declarative package list installed via `home.packages`. Grouped by category:
 | Category | Packages |
 |---|---|
 | Editors | `neovim`, `code-server`, `opencode` |
-| Dev tools | `lazygit`, `tmux` |
+| Dev tools | `lazygit`, `tmux`, `zellij`, `fzf` |
 | Containers | `docker`, `docker-compose`, `jq` |
 | System info | `fastfetch`, `nitch`, `btop`, `clock-rs`, `smartmontools`, `exfatprogs` |
-| Media & graphics | `chafa`, `timg`, `mpv`, `ffmpeg`, `yt-dlp`, `yazi`, `pandoc` |
+| Media & graphics | `chafa`, `timg`, `mpv`, `ffmpeg`, `yt-dlp`, `yazi`, `pandoc`, `dysk`, `foliate`, `nix-search-tv` |
 | Networking & chat | `browsh`, `nchat`, `bluetuith`, `wifitui`, `tailscale`, `reddit-tui`, `reddix`, `discordo`, `wiki-tui`, `hackernews-tui`, `youtube-tui`, `smassh`, `gemini-cli`, `mangal` |
-| Obsidian TUIs | `basalt`, `obsitui`, `nixvim-editor` |
-| Fun | `cmatrix`, `posting` |
+| Obsidian TUIs | `basalt`, `obsitui`, `glow`, `nixvim-editor` |
+| Fun | `cmatrix`, `posting`, `asciiquarium` |
 
 > **Note:** `localsend` is commented out because its Flutter dependency (`aapt`) doesn't support `aarch64-linux`. It will be re-enabled once upstream support lands.
 
@@ -324,6 +338,22 @@ Sets up the Obsidian vault ecosystem for terminal-based note-taking.
     - **Ctrl+E** — open current note in Nixvim
     - **Ctrl+Alt+E** — spawn Nixvim in a new terminal window for the current note
 
+### glow.nix
+
+Declarative theming for the [`glow`](https://github.com/charmbracelet/glow) terminal markdown renderer. Every `glow/themes/*.json` (a glamour v2 `ansi.StyleConfig`) is deployed to `~/.config/glow/themes/<name>.json`, so the theme set is defined entirely by files in the repo.
+
+- **Default theme** — `~/.config/glow/glow.yml` sets `style` to the `retro-orange` theme, derived from the Nixvim `retro-orange` colorscheme palette.
+- **Runtime override** — `GLOW_CONFIG_HOME` points at `~/.local/state/glow`, which glow reads *before* `~/.config/glow`, so the picker can change the active theme without editing the managed config.
+- **`glow-set-theme`** — a fish function that shows an `fzf` picker over `~/.config/glow/themes.list` (regenerated at rebuild, so newly added themes appear automatically). Pass a name to set it directly, or `--reset` to return to the default.
+
+```bash
+glow-set-theme            # fzf picker
+glow-set-theme gruvbox    # set directly
+glow-set-theme --reset    # back to retro-orange
+```
+
+Bundled themes: `retro-orange`, `gruvbox`, `nord`, `tokyo-night`, `catppuccin-mocha`, `dracula`, `blood-red`.
+
 ## Skills
 
 OpenCode skills are stored in `skills/` and auto-deployed to `~/.config/opencode/skills/<name>/` by the [`opencode.nix`](#opencodenix) module (any subdirectory with a `SKILL.md` is symlinked automatically).
@@ -331,6 +361,26 @@ OpenCode skills are stored in `skills/` and auto-deployed to `~/.config/opencode
 ### skill-creator
 
 Interactive wizard for creating new OpenCode skills — guides the agent through naming, scoping, and writing a `SKILL.md` in `skills/<name>/`.
+
+### glow-theme-creator
+
+Turns a described vibe (e.g. "warm retro CRT amber") into a new glamour v2 theme JSON in `glow/themes/` — deriving a palette and matching code-block syntax colors, validating with `jq`, previewing with `glow -s`, and instructing you to rebuild so `glow-set-theme` lists it.
+
+### daily-prep-questions
+
+Runs `skills/daily-prep-questions/scripts/generate-daily.py` to emit 8 deterministic, no-repeat interview-prep questions per day — 3 LeetCode, 2 system design, 1 behavioral, 1 SQL, and 1 LLD — drawn from curated JSON banks in `data/`. Progress is tracked in `progress.json` (pointer-based, so a bank only repeats after a full cycle); `--reset` restarts the cycle and `--show` replays a saved day. The skill also prompts the solve/tracking workflow (LC tracker CSV, SD sketches, STAR answers, SQL `EXPLAIN ANALYZE`, LLD class diagrams).
+
+### hld-problems-generator
+
+Generates system-design practice problems by synthesizing the `~/system-design` reference library. After asking for a problem source (existing / novel / hybrid) and difficulty (junior → senior-architect), it creates a timestamped `practice-problem-<ts>/` folder in the CWD with an AI-interviewer-ready `question.md`, an architect-level `answer.md` (estimation, component deep dives, tradeoff and failure tables, scaling evolution), and EPUB versions of both via `pandoc`.
+
+### system-design-tester
+
+Generates a system-design test paper from selected `~/system-design` topics and writes timestamp-matched `questions-<timestamp>.md` and `.epub` files at the repository root. It supports topic-drill and cumulative modes, configurable difficulty/count/type mix/time limit, and records studied topics and scores in a repo-root `.sd-tester/ledger.json`. Questions embed a `SOURCE-MAP` linking each item back to its source heading; answers are produced separately by `system-design-tutor`.
+
+### system-design-tutor
+
+Companion to `system-design-tester`. Reads a `questions-<timestamp>.md` paper (matched by the shared timestamp token), writes `answers-<timestamp>.md` and `.epub` with model answers, key points, rubrics, common mistakes, and source citations, grades a submitted attempt against the rubric, and explains the reasoning behind any question from the underlying source markdown.
 
 ### update-docs
 
