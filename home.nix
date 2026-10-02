@@ -17,6 +17,7 @@
     ./modules/firecrawl.nix
     ./modules/immich.nix
     ./modules/filebrowser.nix
+    ./modules/glow.nix
   ];
 
   nixpkgs.config = {
