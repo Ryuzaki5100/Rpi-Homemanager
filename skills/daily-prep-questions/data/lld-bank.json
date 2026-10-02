@@ -1,0 +1,22 @@
+{
+  "id": "lld-bank",
+  "type": "low-level-design",
+  "problems": [
+    {"id": 1, "title": "Parking Lot System", "company": "Amazon", "difficulty": "Medium"},
+    {"id": 2, "title": "Elevator Control System", "company": "Google", "difficulty": "Medium"},
+    {"id": 3, "title": "Vending Machine", "company": "Amazon", "difficulty": "Medium"},
+    {"id": 4, "title": "ATM Machine", "company": "Amazon", "difficulty": "Medium"},
+    {"id": 5, "title": "Chess Game", "company": "Google", "difficulty": "Hard"},
+    {"id": 6, "title": "Snake & Ladder", "company": "Amazon", "difficulty": "Medium"},
+    {"id": 7, "title": "Logger (Observer/Observer Pattern)", "company": "Most", "difficulty": "Medium"},
+    {"id": 8, "title": "Notification System", "company": "Meta", "difficulty": "Medium"},
+    {"id": 9, "title": "Movie Ticket Booking", "company": "Amazon", "difficulty": "Hard"},
+    {"id": 10, "title": "Rate Limiter (Token Bucket)", "company": "Meta", "difficulty": "Medium"},
+    {"id": 11, "title": "LRU Cache", "company": "Amazon", "difficulty": "Medium"},
+    {"id": 12, "title": "Task Scheduler", "company": "Google", "difficulty": "Medium"},
+    {"id": 13, "title": "Digital Wallet", "company": "Amazon", "difficulty": "Hard"},
+    {"id": 14, "title": "Splitwise (Expense Sharing)", "company": "Meta", "difficulty": "Medium"},
+    {"id": 15, "title": "TicTacToe + Music Player", "company": "Amazon", "difficulty": "Medium"},
+    {"id": 16, "title": "Payment Provider Abstraction", "company": "Amazon", "difficulty": "Hard"}
+  ]
+}

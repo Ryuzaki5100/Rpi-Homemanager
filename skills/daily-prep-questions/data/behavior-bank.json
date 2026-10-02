@@ -1,0 +1,26 @@
+{
+  "id": "behavior-bank",
+  "type": "behavioral",
+  "questions": [
+    {"id": 1, "title": "Tell me about yourself", "company": "All"},
+    {"id": 2, "title": "Why our company? Why this role?", "company": "All"},
+    {"id": 3, "title": "Biggest technical challenge", "company": "All"},
+    {"id": 4, "title": "A time you disagreed with a teammate", "company": "Amazon"},
+    {"id": 5, "title": "Ambiguous requirements — how you handled it", "company": "All"},
+    {"id": 6, "title": "Tell me about a failure and what you learned", "company": "All"},
+    {"id": 7, "title": "Most impactful work (quantify the impact)", "company": "All"},
+    {"id": 8, "title": "A time you received critical feedback", "company": "Amazon"},
+    {"id": 9, "title": "Cross-team collaboration story", "company": "Google"},
+    {"id": 10, "title": "Shipping under a tight deadline", "company": "Meta"},
+    {"id": 11, "title": "Helping someone else grow (mentorship)", "company": "Google"},
+    {"id": 12, "title": "Going beyond your role (initiative)", "company": "Amazon"},
+    {"id": 13, "title": "Software design tradeoff decision", "company": "All"},
+    {"id": 14, "title": "Production incident you debugged", "company": "Amazon"},
+    {"id": 15, "title": "A time you said no to a feature/scope", "company": "All"},
+    {"id": 16, "title": "How you handle repeated tight deadlines", "company": "All"},
+    {"id": 17, "title": "A project you're proud of", "company": "All"},
+    {"id": 18, "title": "What's your weakness?", "company": "All"},
+    {"id": 19, "title": "Where do you see yourself in 3 years?", "company": "All"},
+    {"id": 20, "title": "Describe your ideal manager/team", "company": "All"}
+  ]
+}

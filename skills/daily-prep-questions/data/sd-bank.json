@@ -1,0 +1,22 @@
+{
+  "id": "sd-bank",
+  "type": "system-design",
+  "problems": [
+    {"id": 1, "title": "URL Shortener", "company": "Amazon", "difficulty": "Medium"},
+    {"id": 2, "title": "Rate Limiter (Distributed)", "company": "Meta", "difficulty": "Medium"},
+    {"id": 3, "title": "Distributed Key-Value Store", "company": "Google", "difficulty": "Hard"},
+    {"id": 4, "title": "Distributed Cache", "company": "Amazon", "difficulty": "Medium"},
+    {"id": 5, "title": "Notification System", "company": "Meta", "difficulty": "Medium"},
+    {"id": 6, "title": "News Feed", "company": "Meta", "difficulty": "Medium"},
+    {"id": 7, "title": "Chat / Messaging System", "company": "Meta", "difficulty": "Medium"},
+    {"id": 8, "title": "Video Streaming Platform", "company": "Netflix", "difficulty": "Medium"},
+    {"id": 9, "title": "Collaborative Editor", "company": "Google", "difficulty": "Hard"},
+    {"id": 10, "title": "Payment / Wallet Service", "company": "Amazon", "difficulty": "Hard"},
+    {"id": 11, "title": "Distributed ID Generator", "company": "Amazon", "difficulty": "Medium"},
+    {"id": 12, "title": "Web Crawler", "company": "Google", "difficulty": "Hard"},
+    {"id": 13, "title": "Typeahead / Autocomplete", "company": "Google", "difficulty": "Medium"},
+    {"id": 14, "title": "Object Storage (S3-like)", "company": "Amazon", "difficulty": "Hard"},
+    {"id": 15, "title": "Ride-Sharing / Dispatch System", "company": "Uber", "difficulty": "Hard"},
+    {"id": 16, "title": "Distributed Task Queue", "company": "Amazon", "difficulty": "Medium"}
+  ]
+}
