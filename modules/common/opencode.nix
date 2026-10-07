@@ -1,7 +1,7 @@
 { config, pkgs, lib, ... }:
 
 let
-  skillsDir = ../skills;
+  skillsDir = ../../skills;
   skillDirs = builtins.readDir skillsDir;
   skillNames = builtins.attrNames (lib.filterAttrs (name: type: type == "directory") skillDirs);
   skillConfigs = builtins.listToAttrs (builtins.map

@@ -56,10 +56,10 @@ add it to the dotfiles theme library so it becomes selectable with `glow-set-the
    - Run: `glow -s ~/dotfiles/glow/themes/<name>.json /tmp/glow-theme-preview.md`
 
 9. **Deploy instructions** (do NOT run the rebuild yourself):
-   - Tell the user to run: `home-manager switch --flake ~/dotfiles#$(whoami)`
+   - Tell the user to run: `home-manager switch --impure --flake ~/dotfiles#$(whoami)`
      (or the `rebuild-home-manager` fish alias).
    - After the rebuild, `glow-set-theme` lists the new theme automatically, because
-     `modules/glow.nix` regenerates `themes.list` from `glow/themes/*.json`.
+     `modules/common/glow.nix` regenerates `themes.list` from `glow/themes/*.json`.
 
 10. **Report** the theme path, the preview command, and the rebuild step.
 

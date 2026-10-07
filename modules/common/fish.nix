@@ -5,7 +5,11 @@
     enable = true;
 
     interactiveShellInit = ''
-      source /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.fish
+      # Multi-user Nix (Linux) and the Determinate installer (macOS) both use
+      # this path; guard it so a single-user install does not error.
+      if test -e /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.fish
+        source /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.fish
+      end
 
       set -gx EDITOR nixvim-editor
 
@@ -17,7 +21,7 @@
 
     shellAliases = {
       nixvim = "nix run github:Ryuzaki5100/nixvim --refresh";
-      rebuild-home-manager = "home-manager switch --flake ~/dotfiles#(whoami) && exec fish";
+      rebuild-home-manager = "home-manager switch --impure --flake ~/dotfiles#(whoami) && exec fish";
       update-home-manager = "cd ~/dotfiles && nix flake update && cd -";
       search = "nix search nixpkgs";
       display = "chafa -f kitty --fit-width";

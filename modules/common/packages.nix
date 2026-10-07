@@ -5,15 +5,14 @@
   ...
 }:
 
-let
-  inherit (pkgs) lib;
-in
+# Cross-platform packages: every entry here is available on x86_64-linux,
+# aarch64-linux and aarch64-darwin. Add a universally-compatible tool once
+# and it lands on all platforms. Platform-specific tools live in
+# modules/linux/packages.nix or modules/darwin/packages.nix.
 {
-
   home.packages = with pkgs; [
     # Editors
     neovim
-    code-server
     opencode
 
     # Dev tools
@@ -24,18 +23,16 @@ in
     jdk
     maven
 
-    # Containers
+    # Containers (CLI; the daemon is provided by the host / Docker Desktop)
     docker
     docker-compose
     jq
 
     # System info
     fastfetch
-    nitch
     btop
     clock-rs
     smartmontools
-    exfatprogs
 
     # Media & graphics
     chafa
@@ -46,7 +43,6 @@ in
     yazi
     pandoc
     dysk
-    foliate
     nix-search-tv
     # localsend
 
@@ -54,8 +50,6 @@ in
     browsh
     nchat
     bitchat-cli
-    bluetuith
-    wifitui
     tailscale
     reddit-tui
     reddix

@@ -1,11 +1,19 @@
 { config, pkgs, lib, ... }:
 
+# Shared Filebrowser options + package + the DB bootstrap script.
+# The service definition lives in the platform layer: modules/linux/filebrowser.nix
+# (systemd) and modules/darwin/filebrowser.nix (launchd).
 let
   cfg = config.services.filebrowser;
   db = "${config.home.homeDirectory}/.config/filebrowser/filebrowser.db";
-in {
+in
+{
   options.services.filebrowser = {
-    enable = lib.mkEnableOption "Filebrowser web file manager";
+    enable = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = "Enable the Filebrowser web file manager.";
+    };
     root = lib.mkOption {
       type = lib.types.path;
       default = config.home.homeDirectory;
@@ -40,36 +48,27 @@ in {
         so the browser sends a single chunk. Default 2 GiB.
       '';
     };
+    initScript = lib.mkOption {
+      type = lib.types.path;
+      internal = true;
+      description = ''
+        Idempotent database bootstrap script. Shared by the Linux systemd unit
+        (ExecStartPre) and the macOS launchd agent (run before exec).
+      '';
+      default = pkgs.writeShellScript "filebrowser-init" ''
+        set -e
+        mkdir -p "${config.home.homeDirectory}/.config/filebrowser"
+        if [ ! -f "${db}" ]; then
+          ${pkgs.filebrowser}/bin/filebrowser config init --database "${db}" >/dev/null
+          ${pkgs.filebrowser}/bin/filebrowser config set --database "${db}" --minimumPasswordLength 8 >/dev/null
+          ${pkgs.filebrowser}/bin/filebrowser config set --database "${db}" --tus.chunkSize ${toString cfg.tusChunkSize} >/dev/null
+          ${pkgs.filebrowser}/bin/filebrowser --database "${db}" users add "${cfg.username}" '${cfg.password}' --perm.admin
+        fi
+      '';
+    };
   };
 
   config = lib.mkIf cfg.enable {
     home.packages = [ pkgs.filebrowser ];
-
-    systemd.user.services.filebrowser = {
-      Unit = {
-        Description = "Filebrowser web file manager";
-        After = [ "network-online.target" ];
-        Wants = [ "network-online.target" ];
-      };
-      Service = {
-        Type = "simple";
-        Restart = "on-failure";
-        RestartSec = 5;
-        ExecStart = "${pkgs.filebrowser}/bin/filebrowser --address ${cfg.address} --port ${toString cfg.port} --root ${cfg.root} --database ${db}";
-        ExecStartPre = pkgs.writeShellScript "filebrowser-init" ''
-          set -e
-          mkdir -p "${config.home.homeDirectory}/.config/filebrowser"
-          if [ ! -f "${db}" ]; then
-            ${pkgs.filebrowser}/bin/filebrowser config init --database "${db}" >/dev/null
-            ${pkgs.filebrowser}/bin/filebrowser config set --database "${db}" --minimumPasswordLength 8 >/dev/null
-            ${pkgs.filebrowser}/bin/filebrowser config set --database "${db}" --tus.chunkSize ${toString cfg.tusChunkSize} >/dev/null
-            ${pkgs.filebrowser}/bin/filebrowser --database "${db}" users add "${cfg.username}" '${cfg.password}' --perm.admin
-          fi
-        '';
-      };
-      Install = {
-        WantedBy = [ "default.target" ];
-      };
-    };
   };
 }

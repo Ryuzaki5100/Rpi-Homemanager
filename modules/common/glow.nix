@@ -12,7 +12,7 @@ let
 
   # Every JSON in glow/themes/ becomes a selectable glow theme. Adding a file
   # here and rebuilding makes it appear in `glow-set-theme` automatically.
-  themesDir = ../glow/themes;
+  themesDir = ../../glow/themes;
   themeFiles = filterAttrs (name: type: type == "regular" && hasSuffix ".json" name) (
     builtins.readDir themesDir
   );
@@ -39,7 +39,7 @@ in
     "glow/glow.yml" = {
       force = true;
       text = ''
-        # Managed by Home Manager (modules/glow.nix). Do not edit by hand.
+        # Managed by Home Manager (modules/common/glow.nix). Do not edit by hand.
         # Default theme. Use the `glow-set-theme` fish function to switch: it
         # writes a runtime override to $GLOW_CONFIG_HOME (${stateDir}).
         style: "${defaultThemePath}"

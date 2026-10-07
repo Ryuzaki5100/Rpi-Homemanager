@@ -1,25 +1,9 @@
-{
-  config,
-  obsitui,
-  nixvim-editor,
-  ...
-}:
-{
+{ ... }:
 
-  imports = [
-    ./modules/core.nix
-    ./modules/env.nix
-    ./modules/fish.nix
-    ./modules/packages.nix
-    ./modules/obsidian.nix
-    ./modules/opencode.nix
-    ./modules/gmail-mcp.nix
-    ./modules/firecrawl.nix
-    ./modules/immich.nix
-    ./modules/filebrowser.nix
-    ./modules/glow.nix
-    ./modules/epub.nix
-  ];
+# Top-level Home Manager module. All logic lives in modules/ (layered by
+# platform); this file only wires the tree in and sets shared nixpkgs config.
+{
+  imports = [ ./modules ];
 
   nixpkgs.config = {
     allowUnfree = true;
@@ -27,27 +11,4 @@
       "openclaw-2026.6.11"
     ];
   };
-
-  home.activation.createMountLinks = ''
-    ln -sfn /mnt/hdd ~/hdd
-  '';
-
-  services.filebrowser = {
-    enable = true;
-  };
-
-  xdg.configFile."mangal/mangal.toml".text = ''
-    [downloader]
-    path = "${config.home.homeDirectory}/manga"
-    create_manga_dir = true
-
-    [formats]
-    use = "pdf"
-
-    [mangadex]
-    language = "en"
-    nsfw = false
-  '';
-
-
 }
