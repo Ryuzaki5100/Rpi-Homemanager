@@ -32,7 +32,7 @@ in
 
       # Font — nerd-fonts.jetbrains-mono is installed below.
       font-family = "JetBrainsMono Nerd Font";
-      font-size = 13;
+      font-size = 16;
       font-thicken = true;
 
       # Transparency + blur (the pretty stuff).
