@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [ "$(uname -s)" != "Linux" ]; then
+    echo "This script is Linux-only (Samba server shares + recycle bins)." >&2
+    echo "macOS shares files via System Settings > General > Sharing. Nothing to do." >&2
+    exit 0
+fi
+
 SMB_CONF="/etc/samba/smb.conf"
 
 echo "=== Samba Setup ==="

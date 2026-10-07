@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [ "$(uname -s)" != "Linux" ]; then
+    echo "This script is Linux-only (udev rule + /etc/fstab for /mnt/hdd)." >&2
+    echo "macOS has no /mnt/hdd; external volumes live under /Volumes. Nothing to do." >&2
+    exit 0
+fi
+
 # Stop the desktop session (udisks2/gvfs) from auto-mounting the Immich HDD
 # (My Passport, exFAT, UUID 7B6D-F242) under /media. That auto-mount collides
 # with /etc/fstab -> /mnt/hdd and leaves the drive in a read-only state, which

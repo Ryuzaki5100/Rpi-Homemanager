@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [ "$(uname -s)" != "Linux" ]; then
+    echo "This script is Linux/Raspberry Pi-only (USB gadget + NetworkManager)." >&2
+    exit 0
+fi
+
 if [ "$EUID" -eq 0 ]; then
     echo "Do not run as root. This script uses sudo when needed."
     exit 1

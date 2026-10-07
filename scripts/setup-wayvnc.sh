@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [ "$(uname -s)" != "Linux" ]; then
+    echo "This script is Linux-only (wayvnc + systemd + Wayland)." >&2
+    echo "macOS offers Screen Sharing natively under System Settings. Nothing to do." >&2
+    exit 0
+fi
+
 RES_WIDTH=2388
 RES_HEIGHT=1668
 REFRESH=60

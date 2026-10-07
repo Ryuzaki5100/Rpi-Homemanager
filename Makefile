@@ -2,7 +2,28 @@ COMPOSE := docker compose -f $(HOME)/.config/immich/docker-compose.yml
 IMMICH_DIR := $(HOME)/.config/immich
 BACKUP_DIR := $(HOME)/immich/backups
 
-.PHONY: help immich-setup immich-teardown immich-start immich-stop immich-shutdown immich-restart immich-pull immich-update immich-logs immich-logs-server immich-logs-ml immich-logs-postgres immich-logs-redis immich-status immich-exec immich-db-shell immich-sync immich-backup immich-restore immich-clean immich-prune immich-ip immich-check-hdd immich-hdd-mount immich-hdd-unmount immich-hdd-status immich-link-library immich-hdd-undo immich-ssd-undo immich-hdd-backup immich-ssd-backup
+# --- Platform selection -----------------------------------------------------
+# DG is a "shell runner": `sg docker -c` on Linux (group access), `sh -c` on
+# macOS (Docker Desktop has no docker group). DAEMON_* start/stop the engine.
+UNAME := $(shell uname -s)
+
+ifeq ($(UNAME),Darwin)
+DG := sh -c
+DAEMON_START := open -a Docker
+DAEMON_STOP := osascript -e 'quit app "Docker"'
+IP_CMD := ipconfig getifaddr en0
+else
+DG := sg docker -c
+DAEMON_START := sudo systemctl start docker
+DAEMON_STOP := sudo systemctl stop docker
+IP_CMD := hostname -I | awk '{print $$1}'
+endif
+
+.PHONY: help require-linux immich-setup immich-teardown immich-start immich-stop immich-shutdown immich-restart immich-pull immich-update immich-logs immich-logs-server immich-logs-ml immich-logs-postgres immich-logs-redis immich-status immich-exec immich-db-shell immich-sync immich-backup immich-restore immich-clean immich-prune immich-ip immich-check-hdd immich-hdd-mount immich-hdd-unmount immich-hdd-status immich-link-library immich-hdd-undo immich-ssd-undo immich-hdd-backup immich-ssd-backup
+
+# Fail fast on targets that only make sense on Linux (HDD/Samba/backups).
+require-linux:
+	@[ "$(UNAME)" = "Linux" ] || { echo "This target is Linux-only (no macOS equivalent: no /mnt/hdd, no Samba server)."; exit 1; }
 
 help:
 	@echo "Usage: make immich-<target>"
@@ -54,12 +75,12 @@ help:
 
 # --- Helpers ---
 
-immich-check-hdd:
+immich-check-hdd: require-linux
 	@mountpoint -q /mnt/hdd || { echo "ERROR: /mnt/hdd is not mounted. Insert the HDD and run: sudo mount /mnt/hdd"; exit 1; }
 
 HDD_UUID := 7B6D-F242
 
-immich-hdd-mount:
+immich-hdd-mount: require-linux
 	@CUR=$$(lsblk -o UUID,NAME -rn /dev/sd* 2>/dev/null | awk -v u="$(HDD_UUID)" '$$1==u{print "/dev/"$$2}' | head -1); \
 	if [ -z "$$CUR" ]; then \
 		echo "ERROR: HDD (UUID $(HDD_UUID)) not detected on USB. Check the cable/power and reconnect it."; \
@@ -93,7 +114,7 @@ immich-hdd-mount:
 	fi; \
 	echo "==> /mnt/hdd mounted rw"
 
-immich-hdd-unmount:
+immich-hdd-unmount: require-linux
 	@if mountpoint -q /mnt/hdd; then \
 		sudo umount /mnt/hdd; \
 		echo "==> /mnt/hdd unmounted"; \
@@ -101,7 +122,7 @@ immich-hdd-unmount:
 		echo "/mnt/hdd is not mounted"; \
 	fi
 
-immich-hdd-status:
+immich-hdd-status: require-linux
 	@if mountpoint -q /mnt/hdd; then \
 		echo "==> /mnt/hdd: MOUNTED"; \
 	else \
@@ -111,25 +132,25 @@ immich-hdd-status:
 
 # --- Samba Shares (recycle-bin undo + rotating backup) ---
 
-immich-hdd-undo:
+immich-hdd-undo: require-linux
 	@mountpoint -q /mnt/hdd || { echo "ERROR: /mnt/hdd is not mounted"; exit 1; }
 	bash $(HOME)/dotfiles/scripts/samba-recycle-restore.sh /mnt/hdd
 
-immich-ssd-undo:
+immich-ssd-undo: require-linux
 	@mountpoint -q /mnt/ssd || { echo "ERROR: /mnt/ssd is not mounted"; exit 1; }
 	bash $(HOME)/dotfiles/scripts/samba-recycle-restore.sh /mnt/ssd
 
-immich-hdd-backup:
+immich-hdd-backup: require-linux
 	@mountpoint -q /mnt/hdd || { echo "ERROR: /mnt/hdd is not mounted"; exit 1; }
 	@mountpoint -q /mnt/ssd || { echo "ERROR: /mnt/ssd is not mounted (backup target)"; exit 1; }
 	bash $(HOME)/dotfiles/scripts/backup-drive.sh /mnt/hdd /mnt/ssd/backups/hdd
 
-immich-ssd-backup:
+immich-ssd-backup: require-linux
 	@mountpoint -q /mnt/ssd || { echo "ERROR: /mnt/ssd is not mounted"; exit 1; }
 	@mountpoint -q /mnt/hdd || { echo "ERROR: /mnt/hdd is not mounted (backup target)"; exit 1; }
 	bash $(HOME)/dotfiles/scripts/backup-drive.sh /mnt/ssd /mnt/hdd/backups/ssd
 
-immich-link-library:
+immich-link-library: require-linux
 	@if [ -L ~/immich/library ]; then \
 		echo "==> Symlink already exists: ~/immich/library -> $$(readlink ~/immich/library)"; \
 	elif [ -d ~/immich/library ]; then \
@@ -145,66 +166,66 @@ immich-link-library:
 
 immich-setup: immich-hdd-mount immich-link-library
 	@echo "==> Starting Docker daemon..."
-	@sudo systemctl start docker
+	@$(DAEMON_START)
 	@echo "==> Creating Immich directories..."
 	@mkdir -p $(HOME)/immich/postgres $(BACKUP_DIR)
 	@echo "==> Pulling latest images..."
-	@sg docker -c "$(COMPOSE) pull"
+	@$(DG) "$(COMPOSE) pull"
 	@echo "==> Starting Immich..."
-	@sg docker -c "$(COMPOSE) up -d"
+	@$(DG) "$(COMPOSE) up -d"
 	@echo ""
-	@echo "==> Immich is running at: http://$$(hostname -I | awk '{print $$1}'):2283"
+	@echo "==> Immich is running at: http://$$($(IP_CMD)):2283"
 
 immich-teardown:
 	@echo "==> Stopping and removing containers + volumes..."
-	@sg docker -c "$(COMPOSE) down -v"
+	@$(DG) "$(COMPOSE) down -v"
 
 # --- Lifecycle ---
 
 immich-start: immich-hdd-mount
-	@sudo systemctl start docker
-	@sg docker -c "$(COMPOSE) up -d"
+	@$(DAEMON_START)
+	@$(DG) "$(COMPOSE) up -d"
 
 immich-stop:
-	sg docker -c "$(COMPOSE) down"
+	$(DG) "$(COMPOSE) down"
 
 immich-shutdown: immich-stop
-	@sudo systemctl stop docker
+	@$(DAEMON_STOP)
 	@echo "==> Docker daemon stopped"
 
 immich-restart:
-	sg docker -c "$(COMPOSE) restart"
+	$(DG) "$(COMPOSE) restart"
 
 immich-pull:
-	sg docker -c "$(COMPOSE) pull"
+	$(DG) "$(COMPOSE) pull"
 
 immich-update: immich-pull immich-restart
 
 # --- Debug ---
 
 immich-logs:
-	sg docker -c "$(COMPOSE) logs -f"
+	$(DG) "$(COMPOSE) logs -f"
 
 immich-logs-server:
-	sg docker -c "$(COMPOSE) logs -f immich_server"
+	$(DG) "$(COMPOSE) logs -f immich_server"
 
 immich-logs-ml:
-	sg docker -c "$(COMPOSE) logs -f immich_machine_learning"
+	$(DG) "$(COMPOSE) logs -f immich_machine_learning"
 
 immich-logs-postgres:
-	sg docker -c "$(COMPOSE) logs -f immich_postgres"
+	$(DG) "$(COMPOSE) logs -f immich_postgres"
 
 immich-logs-redis:
-	sg docker -c "$(COMPOSE) logs -f immich_redis"
+	$(DG) "$(COMPOSE) logs -f immich_redis"
 
 immich-status:
-	sg docker -c "$(COMPOSE) ps"
+	$(DG) "$(COMPOSE) ps"
 
 immich-exec:
-	sg docker -c "$(COMPOSE) exec immich_server bash"
+	$(DG) "$(COMPOSE) exec immich_server bash"
 
 immich-db-shell:
-	sg docker -c "$(COMPOSE) exec immich_postgres psql -U postgres -d immich"
+	$(DG) "$(COMPOSE) exec immich_postgres psql -U postgres -d immich"
 
 # --- Sync & Backup ---
 
@@ -214,7 +235,7 @@ immich-sync: immich-hdd-mount
 immich-backup:
 	@mkdir -p $(BACKUP_DIR)
 	@echo "==> Dumping database..."
-	@sg docker -c "$(COMPOSE) exec -T immich_postgres pg_dump -U postgres immich" | gzip > $(BACKUP_DIR)/immich-$(shell date +%Y%m%d-%H%M%S).sql.gz
+	@$(DG) "$(COMPOSE) exec -T immich_postgres pg_dump -U postgres immich" | gzip > $(BACKUP_DIR)/immich-$(shell date +%Y%m%d-%H%M%S).sql.gz
 	@echo "==> Backup saved to $(BACKUP_DIR)/"
 	@ls -lh $(BACKUP_DIR)/immich-$(shell date +%Y%m%d)*
 
@@ -222,17 +243,17 @@ immich-restore:
 	@LATEST=$$(ls -t $(BACKUP_DIR)/immich-*.sql.gz 2>/dev/null | head -1); \
 	if [ -z "$$LATEST" ]; then echo "No backup found in $(BACKUP_DIR)/"; exit 1; fi; \
 	echo "==> Restoring from $$LATEST..."; \
-	gunzip -c "$$LATEST" | sg docker -c "$(COMPOSE) exec -T immich_postgres psql -U postgres immich"; \
+	gunzip -c "$$LATEST" | $(DG) "$(COMPOSE) exec -T immich_postgres psql -U postgres immich"; \
 	echo "==> Restore complete"
 
 # --- Maintenance ---
 
 immich-clean:
-	@sg docker -c "$(COMPOSE) down --remove-orphans" 2>/dev/null || true
-	@sg docker -c "docker image prune -f"
+	@$(DG) "$(COMPOSE) down --remove-orphans" 2>/dev/null || true
+	@$(DG) "docker image prune -f"
 
 immich-prune:
-	@sg docker -c "docker system prune -a --volumes -f"
+	@$(DG) "docker system prune -a --volumes -f"
 
 immich-ip:
-	@echo "http://$$(hostname -I | awk '{print $$1}'):2283"
+	@echo "http://$$($(IP_CMD)):2283"

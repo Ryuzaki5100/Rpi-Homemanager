@@ -11,8 +11,16 @@ set -euo pipefail
 DEST="${1:?Usage: $0 <destination-path>}"
 LIBRARY="${HOME}/immich/library"
 
+# Run a docker command. On Linux the user may need `sg docker` for group
+# access; on macOS Docker Desktop is used directly.
+if command -v sg >/dev/null 2>&1 && [ "$(uname -s)" != "Darwin" ]; then
+    dk() { sg docker -c "$*"; }
+else
+    dk() { bash -c "$*"; }
+fi
+
 psql_run() {
-    echo "$1" | sg docker -c "docker exec -i immich_postgres psql -U postgres -d immich -t -A"
+    echo "$1" | dk "docker exec -i immich_postgres psql -U postgres -d immich -t -A"
 }
 
 print_progress() {

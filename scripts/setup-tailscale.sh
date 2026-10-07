@@ -6,6 +6,29 @@ if [ "$EUID" -eq 0 ]; then
     exit 1
 fi
 
+# macOS: Tailscale runs as a GUI app with its own daemon; there is no systemd
+# unit to install. Use the app to authenticate and auto-start at login.
+if [ "$(uname -s)" = "Darwin" ]; then
+    echo "==> macOS detected."
+    if [ -d "/Applications/Tailscale.app" ]; then
+        echo "==> Launching the Tailscale app..."
+        open -a Tailscale
+    fi
+    if ! command -v tailscale >/dev/null 2>&1; then
+        echo "Tailscale CLI not found. Install the app:  brew install --cask tailscale" >&2
+        echo "(The Nix package provides the CLI only; the daemon comes from the app.)" >&2
+        exit 1
+    fi
+    echo "==> Bringing the tailnet up (the app may prompt you to log in)..."
+    tailscale up
+    echo ""
+    echo "==> Tailscale status:"
+    tailscale status
+    echo ""
+    echo "Done! The Tailscale app manages the daemon and starts it at login."
+    exit 0
+fi
+
 TAILSCALE="$(command -v tailscale)"
 
 if [ -z "$TAILSCALE" ]; then
