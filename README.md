@@ -20,11 +20,14 @@ Personal Home Manager configuration for a terminal-centric workflow on `aarch64-
   - [gmail-mcp.nix](#gmail-mcpnix)
   - [firecrawl.nix](#firecrawlnix)
   - [immich.nix](#immichnix)
+  - [filebrowser.nix](#filebrowsernix)
   - [obsidian.nix](#obsidiannix)
   - [glow.nix](#glownix)
+  - [epub.nix](#epubnix)
 - [Skills](#skills)
 - [Custom Packages](#custom-packages)
   - [nixvim-editor](#nixvim-editor)
+  - [bitchat-cli](#bitchat-cli)
   - [gmail-mcp-auth](#gmail-mcp-auth)
   - [obsitui](#obsitui)
 - [Quick Start](#quick-start)
@@ -44,9 +47,11 @@ flake.nix  ──►  home.nix  ──►  modules/*.nix
                       ├── pkgs/
                       │     ├── nixvim-editor.nix
                       │     ├── obsitui.nix
-                      │     └── gmail-mcp-auth.nix
+                      │     ├── gmail-mcp-auth.nix
+                      │     └── bitchat-cli.nix
                       │
                       └── skills/
+                            ├── ai-era-mock-interview/SKILL.md
                             ├── batch-resume-tailor/SKILL.md
                             ├── daily-prep-questions/SKILL.md
                             ├── glow-theme-creator/SKILL.md
@@ -62,10 +67,10 @@ flake.nix  ──►  home.nix  ──►  modules/*.nix
 | Layer | Description |
 |---|---|
 | **`flake.nix`** | Entry point. Pins `nixpkgs` (nixos-unstable) and `home-manager`. Builds custom packages and passes them as `extraSpecialArgs` into the module tree. |
-| **`home.nix`** | Thin shim; imports all eleven modules under `modules/`. Receives custom packages as extra arguments. On activation, symlinks `/mnt/hdd` to `~/hdd`. |
+| **`home.nix`** | Thin shim; imports all twelve modules under `modules/`. Receives custom packages as extra arguments. On activation, symlinks `/mnt/hdd` to `~/hdd`. |
 | **`modules/`** | Self-contained Nix files, each responsible for one concern. |
 | **`pkgs/`** | Custom package derivations exported both as flake outputs and installed in the Home Manager profile. |
-| **`skills/`** | OpenCode skill definitions (SKILL.md files) deployed via `xdg.configFile` symlinks. |
+| **`skills/`** | OpenCode skill definitions (`SKILL.md` files, plus optional `GUIDE.md` companions) deployed via `xdg.configFile` symlinks. |
 
 ### Dependencies
 
@@ -82,6 +87,7 @@ Custom packages are exposed under `packages.aarch64-linux`, making them usable f
 nix run github:Ryuzaki5100/dotfiles#obsitui
 nix run github:Ryuzaki5100/dotfiles#nixvim-editor
 nix run github:Ryuzaki5100/dotfiles#gmail-mcp-auth
+nix run github:Ryuzaki5100/dotfiles#bitchat-cli
 ```
 
 ## Structure
@@ -94,6 +100,7 @@ dotfiles/
 ├── modules/
 │   ├── core.nix           # User identity & state version
 │   ├── env.nix            # Session environment variables
+│   ├── epub.nix           # EPUB build tooling (epubcheck, fonts, python)
 │   ├── firecrawl.nix      # Firecrawl MCP server config
 │   ├── filebrowser.nix    # Filebrowser web file manager (systemd user service)
 │   ├── fish.nix           # Fish shell config & aliases
@@ -106,12 +113,14 @@ dotfiles/
 ├── glow/
 │   └── themes/            # glamour v2 theme JSONs (retro-orange, gruvbox, nord, tokyo-night, catppuccin-mocha, dracula, blood-red)
 ├── pkgs/
+│   ├── bitchat-cli.nix    # bitchat CLI (PyPI, buildPythonApplication)
 │   ├── gmail-mcp-auth.nix # Wrapper around gmail-mcp-auth.py (python + google-auth-oauthlib)
 │   ├── nixvim-editor.nix  # Thin wrapper around external Nixvim flake
 │   └── obsitui.nix        # Obsidian TUI from source (npm)
 ├── scripts/
 │   ├── add-subtitles.sh        # Embed an .srt into a video as a soft subtitle track
 │   ├── backup-drive.sh        # Rotating hardlink snapshot backup of a mount
+│   ├── build-epubs.sh         # Convert the ~/interview-prep markdown tree into EPUB books
 │   ├── gmail-mcp-auth.py      # Headless OAuth helper for Gmail MCP
 │   ├── init-filebrowser.sh    # One-shot reproducible Filebrowser setup (interactive password)
 │   ├── init-home-manager.sh   # Bootstrap Home Manager on a fresh system
@@ -121,6 +130,7 @@ dotfiles/
 │   ├── opencode-gateway.py    # HTTP gateway proxy to opencode serve
 │   ├── opencode-serve.sh      # Launch opencode serve and expose on tailnet
 │   ├── download-vid.sh        # Download 4K video with yt-dlp and ffmpeg
+│   ├── epub-preprocess.py     # Preprocess markdown (links, HTML tags, diagram fences) for pandoc
 │   ├── samba-recycle-restore.sh # Restore files from a Samba recycle bin
 │   ├── setup-gmail-mcp.sh     # Interactive Gmail MCP setup wizard
 │   ├── setup-firecrawl.sh     # Save a Firecrawl API key for the MCP server
@@ -130,6 +140,7 @@ dotfiles/
 │   ├── setup-wayvnc.sh        # Set up WayVNC VNC server for iPad access
 │   └── sync-to-ssd.sh         # Sync Immich albums to an external drive
 └── skills/
+    ├── ai-era-mock-interview/ # OpenCode skill: AI-era mock interview on a buggy Java/Maven codebase
     ├── batch-resume-tailor/ # OpenCode skill: batch tailor resumes from job posting URLs
     ├── daily-prep-questions/ # OpenCode skill: daily no-repeat interview-prep set (LC/SD/behavioral/SQL/LLD)
     ├── glow-theme-creator/ # OpenCode skill: build glow themes from a described vibe
@@ -190,6 +201,7 @@ Configures Fish as the login shell.
 | `ga` | `git add .` |
 | `op` | `opencode` |
 | `yt` | `~/dotfiles/scripts/download-vid.sh` |
+| `build-epubs` | `~/dotfiles/scripts/build-epubs.sh` |
 
 **Functions:**
 
@@ -213,6 +225,7 @@ Configures [OpenCode](https://opencode.ai) — an AI coding assistant — via `p
 
 **Skill deployment:**
 - Automatically discovers subdirectories under `skills/` and symlinks each `SKILL.md` into `~/.config/opencode/skills/<name>/`
+- Any `GUIDE.md` found alongside a `SKILL.md` is symlinked too, so candidate/human-facing guides (e.g. [`ai-era-mock-interview`](#ai-era-mock-interview)) ship with the skill
 - This makes locally-developed skills available to OpenCode without manual copying
 
 ### packages.nix
@@ -222,11 +235,11 @@ Declarative package list installed via `home.packages`. Grouped by category:
 | Category | Packages |
 |---|---|
 | Editors | `neovim`, `code-server`, `opencode` |
-| Dev tools | `lazygit`, `tmux`, `zellij`, `fzf` |
+| Dev tools | `lazygit`, `tmux`, `zellij`, `fzf`, `jdk`, `maven` |
 | Containers | `docker`, `docker-compose`, `jq` |
 | System info | `fastfetch`, `nitch`, `btop`, `clock-rs`, `smartmontools`, `exfatprogs` |
 | Media & graphics | `chafa`, `timg`, `mpv`, `ffmpeg`, `yt-dlp`, `yazi`, `pandoc`, `dysk`, `foliate`, `nix-search-tv` |
-| Networking & chat | `browsh`, `nchat`, `bluetuith`, `wifitui`, `tailscale`, `reddit-tui`, `reddix`, `discordo`, `wiki-tui`, `hackernews-tui`, `youtube-tui`, `smassh`, `gemini-cli`, `mangal` |
+| Networking & chat | `browsh`, `nchat`, `bitchat-cli`, `bluetuith`, `wifitui`, `tailscale`, `reddit-tui`, `reddix`, `discordo`, `wiki-tui`, `hackernews-tui`, `youtube-tui`, `smassh`, `gemini-cli`, `mangal` |
 | Obsidian TUIs | `basalt`, `obsitui`, `glow`, `nixvim-editor` |
 | Fun | `cmatrix`, `posting`, `asciiquarium` |
 
@@ -354,6 +367,18 @@ glow-set-theme --reset    # back to retro-orange
 
 Bundled themes: `retro-orange`, `gruvbox`, `nord`, `tokyo-night`, `catppuccin-mocha`, `dracula`, `blood-red`.
 
+### epub.nix
+
+Declares the tooling used by [`scripts/build-epubs.sh`](scripts/build-epubs.sh) to turn the `~/interview-prep` markdown tree into EPUB books. Everything is pulled from the Home Manager profile — nothing is installed or downloaded at build time:
+
+| Package | Purpose |
+|---|---|
+| `epubcheck` | EPUB 3 validation; each built book is checked and the script fails if any is invalid |
+| `dejavu_fonts` | Provides `DejaVu Sans Mono`, embedded and used for code blocks and ASCII/box-drawing diagrams |
+| `python3` | Runs the [`epub-preprocess.py`](scripts/epub-preprocess.py) sanitizer |
+
+`pandoc` (the actual converter) already lives in [`packages.nix`](#packagesnix).
+
 ## Skills
 
 OpenCode skills are stored in `skills/` and auto-deployed to `~/.config/opencode/skills/<name>/` by the [`opencode.nix`](#opencodenix) module (any subdirectory with a `SKILL.md` is symlinked automatically).
@@ -361,6 +386,12 @@ OpenCode skills are stored in `skills/` and auto-deployed to `~/.config/opencode
 ### skill-creator
 
 Interactive wizard for creating new OpenCode skills — guides the agent through naming, scoping, and writing a `SKILL.md` in `skills/<name>/`.
+
+### ai-era-mock-interview
+
+Runs an AI-era mock interview inside a fresh working directory: the agent plays **both interviewer and Copilot**, scaffolding a buggy Java/Maven `codebase/` from a curated or generated scenario plus a symptom-driven `TICKET.md`. Candidate prompts are sent with `>ai:` (routed to the Copilot and logged to `prompt-log.md`), nudges with `>hint:` (each costs points), and plain messages go to the interviewer. It interleaves system-design and theory follow-ups drawn from `~/system-design/`, then grades prompt quality (5 dimensions), the resulting code diff, and the design discussion into `evaluation.md`, appending one line to `~/interview-sim/history.jsonl`.
+
+Curated scenarios live under `skills/ai-era-mock-interview/scenarios/` (N+1 query, IDOR, deadlock on transfer, fixed-window rate limiter) with hidden `solution.md`/`rubric.md`; the bug-class taxonomy and difficulty mapping are in `taxonomy.md`. Requires `jdk` + `maven` (see [packages.nix](#packagesnix)); `scripts/run-tests.sh` falls back to a `javac`/`java` harness when Maven is unavailable. A candidate-facing walkthrough ships as the skill's `GUIDE.md`.
 
 ### glow-theme-creator
 
@@ -417,6 +448,17 @@ nix run github:Ryuzaki5100/nixvim --refresh -- "$@"
 ```
 
 Used as the system `EDITOR` and referenced by Basalt keybindings for opening notes.
+
+### bitchat-cli
+
+Builds [bitchat-cli](https://github.com/dearabhin/bitchat-cli) — serverless peer-to-peer chat over a Bluetooth LE mesh, wire-compatible with the bitchat app — from the PyPI source tarball using `buildPythonApplication`. Provides both the `bitchat-cli` and `bitchat` commands.
+
+| Attribute | Value |
+|---|---|
+| Source | `files.pythonhosted.org` (sdist) |
+| Build | `buildPythonApplication` (`pyproject`/setuptools) |
+| Runtime deps | `bleak`, `cryptography`, `prompt-toolkit` |
+| License | GPL-3.0-or-later |
 
 ### gmail-mcp-auth
 
@@ -716,6 +758,17 @@ bash ~/dotfiles/scripts/opencode-serve.sh
 curl -d 'Summarize the last 3 git commits' http://localhost:8080
 ```
 
+### Interview-Prep EPUB Builds
+
+[`scripts/build-epubs.sh`](scripts/build-epubs.sh) (aliased `build-epubs`) converts the `~/interview-prep` markdown tree into EPUB books. It uses only profile tools (declared in [`epub.nix`](#epubnix) plus `pandoc`), never modifies the source tree, and validates every book before finishing:
+
+```bash
+build-epubs                       # ~/interview-prep -> ~/interview-prep-epub
+build-epubs SRC OUT               # explicit source and output directories
+```
+
+It produces one EPUB per directory that directly contains markdown (mirroring the tree) and one master `interview-prep.epub` containing every file. A generated `epub.css` embeds `DejaVu Sans Mono` for code and box-drawing diagrams; [`scripts/epub-preprocess.py`](scripts/epub-preprocess.py) sanitizes each file first (flattening raw HTML Q&A blocks, rewriting internal links to anchors, relabeling mermaid/box-drawing fences) so `epubcheck` passes. Overridable via `SRC`, `OUT`, `AUTHOR`, and `LANG_CODE` environment variables.
+
 ## Usage
 
 | Command | Description |
@@ -730,6 +783,7 @@ curl -d 'Summarize the last 3 git commits' http://localhost:8080
 | `edot` | Open dotfiles in Nixvim |
 | `ga` | `git add .` |
 | `yt` | Download a 4K video via `download-vid.sh` |
+| `build-epubs` | Build EPUB books from the ~/interview-prep markdown tree |
 | `generate-ssh-key` | Generate an Ed25519 SSH key for a given email |
 | `bash ~/dotfiles/scripts/install-nix.sh` | Install Nix with --daemon on a fresh system |
 | `bash ~/dotfiles/scripts/download-vid.sh` | Download a 4K video from a URL using yt-dlp + ffmpeg |
