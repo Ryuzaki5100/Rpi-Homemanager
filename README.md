@@ -3,15 +3,16 @@
 [![NixOS](https://img.shields.io/badge/NixOS-unstable-blue?logo=nixos&logoColor=white)](https://nixos.org)
 [![Home Manager](https://img.shields.io/badge/Home%20Manager-25.11-green?logo=nixos&logoColor=white)](https://github.com/nix-community/home-manager)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![Arch](https://img.shields.io/badge/arch-aarch64--linux-red)](#)
+[![Arch](https://img.shields.io/badge/arch-aarch64--linux%20%7C%20aarch64--darwin-red)](#)
 
-Personal Home Manager configuration for a terminal-centric workflow on `aarch64-linux`. This flake manages user-level packages, shell configuration, environment variables, and Obsidian TUI tooling — all without any NixOS system-level configuration.
+Personal Home Manager configuration for a terminal-centric workflow, shared across `aarch64-linux` (Raspberry Pi 5) and `aarch64-darwin` (Apple Silicon). `x86_64-linux` is supported structurally by the module tree but is not currently exercised by a machine. This flake manages user-level packages, shell configuration, environment variables, and Obsidian TUI tooling — all without any system-level configuration.
 
 ## Table of Contents
 
 - [Architecture](#architecture)
 - [Structure](#structure)
 - [Modules](#modules)
+  - [Platform layers](#platform-layers)
   - [core.nix](#corenix)
   - [env.nix](#envnix)
   - [fish.nix](#fishnix)
@@ -31,6 +32,7 @@ Personal Home Manager configuration for a terminal-centric workflow on `aarch64-
   - [gmail-mcp-auth](#gmail-mcp-auth)
   - [obsitui](#obsitui)
 - [Quick Start](#quick-start)
+  - [macOS Support](#macos-support)
   - [Gmail MCP Setup](#gmail-mcp-setup)
   - [Firecrawl Setup](#firecrawl-setup)
   - [Tailscale Setup](#tailscale-setup)
@@ -42,7 +44,12 @@ Personal Home Manager configuration for a terminal-centric workflow on `aarch64-
 ## Architecture
 
 ```
-flake.nix  ──►  home.nix  ──►  modules/*.nix
+flake.nix  ──►  home.nix  ──►  modules/default.nix
+                      │              │
+                      │              ├── common/          # builds on every platform
+                      │              ├── linux/           # x86_64-linux + aarch64-linux
+                      │              ├── linux-aarch64/   # Raspberry Pi 5 hardware
+                      │              └── darwin/          # aarch64-darwin
                       │
                       ├── pkgs/
                       │     ├── nixvim-editor.nix
@@ -66,9 +73,11 @@ flake.nix  ──►  home.nix  ──►  modules/*.nix
 
 | Layer | Description |
 |---|---|
-| **`flake.nix`** | Entry point. Pins `nixpkgs` (nixos-unstable) and `home-manager`. Builds custom packages and passes them as `extraSpecialArgs` into the module tree. |
-| **`home.nix`** | Thin shim; imports all twelve modules under `modules/`. Receives custom packages as extra arguments. On activation, symlinks `/mnt/hdd` to `~/hdd`. |
-| **`modules/`** | Self-contained Nix files, each responsible for one concern. |
+| **`flake.nix`** | Entry point. Pins `nixpkgs` (nixos-unstable) and `home-manager`. Builds custom packages per system (`packages.<system>` for `x86_64-linux`, `aarch64-linux`, `aarch64-darwin`) and passes them as `extraSpecialArgs` into the module tree. The `homeConfigurations.<user>` output targets the current host. |
+| **`home.nix`** | Thin shim; imports `modules/` and sets shared `nixpkgs.config`. |
+| **`modules/default.nix`** | The single platform-selection point. Imports `common/` always, plus the matching platform layer(s) based on `pkgs.stdenv.hostPlatform`. |
+| **`modules/common/`** | Modules and packages that build on **every** platform. |
+| **`modules/linux/`, `linux-aarch64/`, `darwin/`** | Platform-specific packages and services (see [Platform layers](#platform-layers)). |
 | **`pkgs/`** | Custom package derivations exported both as flake outputs and installed in the Home Manager profile. |
 | **`skills/`** | OpenCode skill definitions (`SKILL.md` files, plus optional `GUIDE.md` companions) deployed via `xdg.configFile` symlinks. |
 
@@ -81,7 +90,7 @@ flake.nix  ──►  home.nix  ──►  modules/*.nix
 
 ### Custom Packages as Flake Outputs
 
-Custom packages are exposed under `packages.aarch64-linux`, making them usable from outside this flake:
+Custom packages are exposed under `packages.<system>` (`x86_64-linux`, `aarch64-linux`, `aarch64-darwin`), making them usable from outside this flake:
 
 ```bash
 nix run github:Ryuzaki5100/dotfiles#obsitui
@@ -98,18 +107,31 @@ dotfiles/
 ├── flake.lock             # Locked dependency revisions
 ├── home.nix               # Top-level Home Manager module
 ├── modules/
-│   ├── core.nix           # User identity & state version
-│   ├── env.nix            # Session environment variables
-│   ├── epub.nix           # EPUB build tooling (epubcheck, fonts, python)
-│   ├── firecrawl.nix      # Firecrawl MCP server config
-│   ├── filebrowser.nix    # Filebrowser web file manager (systemd user service)
-│   ├── fish.nix           # Fish shell config & aliases
-│   ├── glow.nix           # glow markdown themes & glow-set-theme picker
-│   ├── gmail-mcp.nix      # Gmail MCP auth packages
-│   ├── immich.nix         # Immich docker-compose config & env
-│   ├── obsidian.nix       # Obsidian vaults & Basalt config
-│   ├── opencode.nix       # OpenCode config & MCP settings
-│   └── packages.nix       # Declarative package list
+│   ├── default.nix         # Platform aggregator (common + host layer)
+│   ├── common/             # Builds on every platform
+│   │   ├── core.nix            # User identity, $HOME-driven home dir, state version
+│   │   ├── env.nix            # Session environment variables
+│   │   ├── epub.nix           # EPUB build tooling (epubcheck, fonts, python, fontconfig)
+│   │   ├── filebrowser.nix    # Filebrowser options + package + DB bootstrap
+│   │   ├── firecrawl.nix      # Firecrawl MCP server config
+│   │   ├── fish.nix           # Fish shell config & aliases
+│   │   ├── glow.nix           # glow markdown themes & glow-set-theme picker
+│   │   ├── gmail-mcp.nix      # Gmail MCP auth packages
+│   │   ├── immich.nix         # Immich compose + options (platform-parameterized)
+│   │   ├── mangal.nix         # Mangal downloader config
+│   │   ├── obsidian.nix       # Obsidian vaults & Basalt config
+│   │   ├── opencode.nix       # OpenCode config, MCP settings & skill deployment
+│   │   └── packages.nix       # Cross-platform package set
+│   ├── linux/              # x86_64-linux + aarch64-linux
+│   │   ├── filebrowser.nix    # systemd user unit
+│   │   ├── immich.nix         # Enables the /etc/localtime bind-mount
+│   │   ├── mounts.nix         # ~/hdd -> /mnt/hdd activation
+│   │   └── packages.nix       # Linux-only package set
+│   ├── linux-aarch64/      # Raspberry Pi 5 only
+│   │   └── immich-hwaccel.nix # V4L2 decoder passthrough + HW transcode
+│   └── darwin/             # aarch64-darwin
+│       ├── filebrowser.nix    # launchd user agent
+│       └── packages.nix       # macOS-only package set
 ├── glow/
 │   └── themes/            # glamour v2 theme JSONs (retro-orange, gruvbox, nord, tokyo-night, catppuccin-mocha, dracula, blood-red)
 ├── pkgs/
@@ -155,17 +177,32 @@ dotfiles/
 
 ## Modules
 
+Modules are grouped into platform layers and selected at build time by [`modules/default.nix`](modules/default.nix), so Home Manager only builds what the host can run. A universally-compatible package is added **once** to `common/packages.nix`; a Linux-only or macOS-only tool goes in the matching layer.
+
+### Platform layers
+
+| Layer | Imported when | Contains |
+|---|---|---|
+| `common/` | always | Cross-platform packages and config (see the sections below) |
+| `linux/` | `pkgs.stdenv.hostPlatform.isLinux` | Linux packages, systemd services, `/mnt/hdd` mounts, Immich localtime mount |
+| `linux-aarch64/` | Linux **and** `isAarch64` | Pi 5 hardware: V4L2 decoder passthrough + Immich HW transcode |
+| `darwin/` | `pkgs.stdenv.hostPlatform.isDarwin` | macOS packages and the launchd Filebrowser agent |
+
 ### core.nix
 
-Sets the user identity and Home Manager state version. The username is resolved dynamically from the `$USER` environment variable (falling back to `ryuzaki` if unset), so the same flake works across NixOS, Debian, and RPi OS without editing.
+Sets the user identity and Home Manager state version. The username is resolved dynamically from the `$USER` environment variable (falling back to `ryuzaki` if unset), and the home directory prefers `$HOME` (falling back to `/Users/<user>` on macOS and `/home/<user>` on Linux), so the same flake works across NixOS, Debian, RPi OS, and macOS without editing.
 
 ```nix
 currentUser = builtins.getEnv "USER";
 userName = if currentUser == "" then "ryuzaki" else currentUser;
+envHome = builtins.getEnv "HOME";
 
-home.username      = userName;
-home.homeDirectory = "/home/${userName}";
-home.stateVersion  = "25.11";
+home.username = userName;
+home.homeDirectory =
+  if envHome == "" then
+    (if pkgs.stdenv.hostPlatform.isDarwin then "/Users/${userName}" else "/home/${userName}")
+  else envHome;
+home.stateVersion = "25.11";
 programs.home-manager.enable = true;
 ```
 
@@ -182,7 +219,7 @@ Exports a single session variable:
 Configures Fish as the login shell.
 
 **Interactive shell initialisation:**
-- Sources the Nix daemon profile for environment integration
+- Sources the Nix daemon profile for environment integration (existence-guarded so it works on both Nix and the Determinate installer)
 - Re-exports `EDITOR` for shell sessions
 - Binds autosuggestion acceptance to multiple keys: **Ctrl+Space**, **Alt+Space**, **Alt+.**, and **Shift+Tab**
 
@@ -191,7 +228,7 @@ Configures Fish as the login shell.
 | Alias | Command |
 |---|---|
 | `nixvim` | `nix run github:Ryuzaki5100/nixvim --refresh` |
-| `rebuild-home-manager` | `home-manager switch --flake ~/dotfiles#(whoami) && exec fish` |
+| `rebuild-home-manager` | `home-manager switch --impure --flake ~/dotfiles#(whoami) && exec fish` |
 | `update-home-manager` | `cd ~/dotfiles && nix flake update && cd -` |
 | `search` | `nix search nixpkgs` |
 | `clock` | `clock-rs -c bright-black -B -b` |
@@ -230,18 +267,20 @@ Configures [OpenCode](https://opencode.ai) — an AI coding assistant — via `p
 
 ### packages.nix
 
-Declarative package list installed via `home.packages`. Grouped by category:
+Declarative cross-platform package list installed via `home.packages` from [`modules/common/packages.nix`](modules/common/packages.nix). Grouped by category (Linux-only extras noted in parentheses):
 
 | Category | Packages |
 |---|---|
-| Editors | `neovim`, `code-server`, `opencode` |
+| Editors | `neovim`, `opencode` (`code-server` on Linux) |
 | Dev tools | `lazygit`, `tmux`, `zellij`, `fzf`, `jdk`, `maven` |
 | Containers | `docker`, `docker-compose`, `jq` |
-| System info | `fastfetch`, `nitch`, `btop`, `clock-rs`, `smartmontools`, `exfatprogs` |
-| Media & graphics | `chafa`, `timg`, `mpv`, `ffmpeg`, `yt-dlp`, `yazi`, `pandoc`, `dysk`, `foliate`, `nix-search-tv` |
-| Networking & chat | `browsh`, `nchat`, `bitchat-cli`, `bluetuith`, `wifitui`, `tailscale`, `reddit-tui`, `reddix`, `discordo`, `wiki-tui`, `hackernews-tui`, `youtube-tui`, `smassh`, `gemini-cli`, `mangal` |
+| System info | `fastfetch`, `btop`, `clock-rs`, `smartmontools` (`nitch` on Linux) |
+| Media & graphics | `chafa`, `timg`, `mpv`, `ffmpeg`, `yt-dlp`, `yazi`, `pandoc`, `dysk`, `nix-search-tv` (`foliate` on Linux) |
+| Networking & chat | `browsh`, `nchat`, `bitchat-cli`, `tailscale`, `reddit-tui`, `reddix`, `discordo`, `wiki-tui`, `hackernews-tui`, `youtube-tui`, `smassh`, `gemini-cli`, `mangal` (`bluetuith`, `wifitui` on Linux) |
 | Obsidian TUIs | `basalt`, `obsitui`, `glow`, `nixvim-editor` |
 | Fun | `cmatrix`, `posting`, `asciiquarium` |
+
+Platform-specific packages live in [`modules/linux/packages.nix`](modules/linux/packages.nix) (`code-server`, `nitch`, `bluetuith`, `wifitui`, `exfatprogs`, `foliate`) and [`modules/darwin/packages.nix`](modules/darwin/packages.nix). macOS uses `fastfetch` in place of `nitch`, and native Bluetooth/Wi-Fi/exFAT in place of the Linux TUIs.
 
 > **Note:** `localsend` is commented out because its Flutter dependency (`aapt`) doesn't support `aarch64-linux`. It will be re-enabled once upstream support lands.
 
@@ -280,7 +319,7 @@ The MCP server configuration itself was moved to [`opencode.nix`](#opencodenix).
 **On a new machine:**
 ```bash
 git clone https://github.com/Ryuzaki5100/dotfiles ~/dotfiles
-home-manager switch --flake ~/dotfiles#$(whoami)
+home-manager switch --impure --flake ~/dotfiles#$(whoami)
 # Copy credentials.json to ~/.config/gmail-mcp/credentials.json
 bash ~/dotfiles/scripts/setup-gmail-mcp.sh
 ```
@@ -296,39 +335,53 @@ Configures the [Firecrawl](https://firecrawl.dev) MCP server — web search, scr
 
 **Setup on a new machine:**
 ```bash
-home-manager switch --flake ~/dotfiles#$(whoami)   # installs nodejs + MCP config
+home-manager switch --impure --flake ~/dotfiles#$(whoami)   # installs nodejs + MCP config
 bash ~/dotfiles/scripts/setup-firecrawl.sh       # saves the API key
 ```
 
 ### immich.nix
 
-Deploys [Immich](https://immich.app) — a self-hosted photo and video management server — as a Docker Compose stack.
+Deploys [Immich](https://immich.app) — a self-hosted photo and video management server — as a Docker Compose stack. The compose file and `.env` are generated on **every** platform from [`modules/common/immich.nix`](modules/common/immich.nix); Linux layers flip on host-specific bits.
 
 **What it writes:**
-- `~/.config/immich/docker-compose.yml` — Immich server, machine learning, Redis (Valkey), and PostgreSQL services, exposed on port `2283`. The server passes `/dev/video19` through for hardware-accelerated transcoding on the Pi 5 (V4L2 HEVC decoder), and both the server and machine-learning services have Docker healthchecks enabled.
-- `~/.config/immich/.env` — storage locations, `TZ=Asia/Kolkata`, pinned `IMMICH_VERSION=v3`, and `IMMICH_HW_ACCEL_ENABLED=true` for hardware acceleration
+- `~/.config/immich/docker-compose.yml` — Immich server, machine learning, Redis (Valkey), and PostgreSQL services, exposed on port `2283`. Both the server and machine-learning services have Docker healthchecks enabled. `devices:` and the `/etc/localtime` bind-mount are emitted only when enabled by a platform layer.
+- `~/.config/immich/.env` — storage locations, `TZ=Asia/Kolkata`, pinned `IMMICH_VERSION=v3`, and `IMMICH_HW_ACCEL_ENABLED` (true only where a decoder is passed through)
 - Creates `~/immich/postgres` for database data and scaffolds the library subdirectories (`profile`, `thumbs`, `upload`, `library`, `backups`, `encoded-video`) inside `~/immich/library`
 
+**Options** (`services.immich.*`):
+
+| Option | Default | Set by |
+|---|---|---|
+| `enable` | `true` | — |
+| `mountLocaltime` | `false` | `modules/linux/immich.nix` (`true`) |
+| `hardwareAcceleration` | `false` | `modules/linux-aarch64/immich-hwaccel.nix` (`true`) |
+| `devices` | `[ ]` | `modules/linux-aarch64/immich-hwaccel.nix` (`/dev/video19`) |
+
 **Storage layout:**
-- `~/immich/library` — photo/video uploads; intended to be a symlink to `/mnt/hdd/immich/library` (see `make immich-link-library`)
+- `~/immich/library` — photo/video uploads; on Linux intended to be a symlink to `/mnt/hdd/immich/library` (see `make immich-link-library`)
 - `~/immich/postgres` — database data (must stay on local disk, not a network mount)
 
-**Note:** All services use `restart: "no"` — containers are started and stopped explicitly via the Makefile targets, not auto-restarted on boot.
+**Platform notes:**
+- **aarch64-linux (Pi 5):** `/dev/video19` is passed through and `IMMICH_HW_ACCEL_ENABLED=true` for V4L2 HEVC transcoding.
+- **aarch64-darwin:** runs on Docker Desktop; no device passthrough or hardware acceleration.
+- All services use `restart: "no"` — containers are started/stopped explicitly via the Makefile targets, not auto-restarted on boot.
 
 ### filebrowser.nix
 
-Runs [Filebrowser](https://filebrowser.org) — a web-based file manager — as a `systemd` **user service** so files on the RPi (e.g. `~/Movies`) can be uploaded/downloaded from the iPad via a browser.
+Runs [Filebrowser](https://filebrowser.org) — a web-based file manager — as a **user service** so files (e.g. `~/Movies`) can be uploaded/downloaded from another device via a browser.
 
-**What it does:**
-- Installs `filebrowser` and declares a `systemd.user.services.filebrowser` unit bound to `default.target` with `Restart=on-failure`
-- Serves `--root` (default `~`) on `--address 0.0.0.0:8080`
-- On first start (`ExecStartPre`), bootstraps the Bolt DB with the configured admin user, a minimum password length of 8, and a TUS chunk size that avoids Safari freezing after the first chunk
+**Layering:**
+- [`modules/common/filebrowser.nix`](modules/common/filebrowser.nix) defines the options, installs the package, and builds the shared DB-bootstrap script.
+- [`modules/linux/filebrowser.nix`](modules/linux/filebrowser.nix) declares the `systemd.user.services.filebrowser` unit (`Restart=on-failure`, bootstrap as `ExecStartPre`).
+- [`modules/darwin/filebrowser.nix`](modules/darwin/filebrowser.nix) declares a `launchd.agents.filebrowser` agent (`RunAtLoad`, `KeepAlive = { SuccessfulExit = false; }`) that runs the bootstrap before `exec`ing filebrowser.
 
-**Options** (`services.filebrowser.*`, see `modules/filebrowser.nix`):
+It serves `--root` (default `~`) on `--address 0.0.0.0:8080`.
+
+**Options** (`services.filebrowser.*`, defined in [`modules/common/filebrowser.nix`](modules/common/filebrowser.nix)):
 
 | Option | Default | Description |
 |---|---|---|
-| `enable` | `false` | Turn the module on |
+| `enable` | `true` | Turn the module on |
 | `root` | `~` | Directory Filebrowser serves |
 | `port` | `8080` | Listen port |
 | `address` | `0.0.0.0` | Listen address |
@@ -375,6 +428,7 @@ Declares the tooling used by [`scripts/build-epubs.sh`](scripts/build-epubs.sh) 
 |---|---|
 | `epubcheck` | EPUB 3 validation; each built book is checked and the script fails if any is invalid |
 | `dejavu_fonts` | Provides `DejaVu Sans Mono`, embedded and used for code blocks and ASCII/box-drawing diagrams |
+| `fontconfig` | Provides `fc-match`, used by `build-epubs.sh` to locate the font on both Linux and macOS |
 | `python3` | Runs the [`epub-preprocess.py`](scripts/epub-preprocess.py) sanitizer |
 
 `pandoc` (the actual converter) already lives in [`packages.nix`](#packagesnix).
@@ -486,8 +540,9 @@ Builds [obsitui](https://github.com/atr0t0s/obsitui) — a terminal UI for brows
 - Nix with flakes enabled (`nix-command` and `flakes` experimental features)
 - Home Manager installed
 
-> **On a truly fresh system without Nix**, run `bash ~/dotfiles/scripts/install-nix.sh` first
-> to install Nix with `--daemon` mode, then log out and back in before proceeding.
+> **On a truly fresh system without Nix**, run `bash ~/dotfiles/scripts/install-nix.sh` first.
+> It installs the official multi-user (`--daemon`) installer on Linux and the
+> Determinate Systems installer on macOS, then log out and back in before proceeding.
 
 ### Installation
 
@@ -498,23 +553,58 @@ Builds [obsitui](https://github.com/atr0t0s/obsitui) — a terminal UI for brows
 git clone https://github.com/Ryuzaki5100/dotfiles ~/dotfiles
 
 # Build and activate the Home Manager configuration
-home-manager switch --flake ~/dotfiles#$(whoami)
+home-manager switch --impure --flake ~/dotfiles#$(whoami)
 ```
 
-**On a fresh system (bootstraps flakes + Home Manager):**
+**On a fresh system (bootstraps flakes + Home Manager + Fish login shell):**
 
 ```bash
 git clone https://github.com/Ryuzaki5100/dotfiles ~/dotfiles
 bash ~/dotfiles/scripts/init-home-manager.sh
 ```
 
+> **Why `--impure`?** The flake reads the host platform and username
+> (`builtins.currentSystem` / `builtins.getEnv`) so the same command targets Linux
+> or macOS correctly. Under pure evaluation it falls back to `aarch64-linux`.
+
 ### Updating dependencies
 
 ```bash
-cd ~/dotfiles && nix flake update && home-manager switch --flake .#$(whoami)
+cd ~/dotfiles && nix flake update && home-manager switch --impure --flake .#$(whoami)
 ```
 
 Both commands are aliased as `rebuild-home-manager` and `update-home-manager` for convenience.
+
+### macOS Support
+
+The configuration is layered so Home Manager builds only the modules the host can run — see [Platform layers](#platform-layers). On Apple Silicon:
+
+1. **Install Nix** (Determinate installer):
+   ```bash
+   bash ~/dotfiles/scripts/install-nix.sh
+   ```
+2. **Apply the configuration and set Fish as the login shell:**
+   ```bash
+   bash ~/dotfiles/scripts/init-home-manager.sh
+   ```
+   Or manually:
+   ```bash
+   home-manager switch --impure --flake ~/dotfiles#$(whoami)
+   echo "$(command -v fish)" | sudo tee -a /etc/shells
+   chsh -s "$(command -v fish)"
+   ```
+
+**What works on macOS:** all `common/` modules — `neovim`, `opencode` (+ skills and MCP servers), `glow`, `obsidian`/`basalt`, `epub` tooling, `mangal`, the resume/interview skills, plus `docker` (Docker Desktop), `tailscale` (CLI; the app provides the daemon), `fastfetch`, media/dev tools, and Filebrowser via a **launchd** agent.
+
+**Platform differences:**
+
+| Feature | Linux | macOS |
+|---|---|---|
+| Filebrowser service | `systemd` user unit | `launchd` agent |
+| Immich | Docker + `/etc/localtime`; Pi 5 gets `/dev/video19` + HW transcode | Docker Desktop; no device passthrough/HW accel |
+| Tailscale | `tailscaled` + systemd unit (via `scripts/setup-tailscale.sh`) | Tailscale app (`brew install --cask tailscale`) |
+| `nitch`, `code-server`, `foliate`, `bluetuith`, `wifitui`, `exfatprogs` | installed | not built (use `fastfetch`, native Bluetooth/Wi-Fi/exFAT) |
+| HDD `/mnt/hdd`, Samba shares, drive backups, RPi USB-gadget, WayVNC | available (`make immich-*`, scripts) | **Linux-only** — scripts/targets exit with a clear message |
 
 ### Gmail MCP Setup
 
@@ -523,7 +613,7 @@ Two paths: **automated** (recommended) or **manual** (understanding).
 #### Automated (script)
 
 ```bash
-# After home-manager switch --flake ~/dotfiles
+# After home-manager switch --impure --flake ~/dotfiles
 bash ~/dotfiles/scripts/setup-gmail-mcp.sh
 ```
 
@@ -571,7 +661,7 @@ The script will:
 ##### 2. Run the HM module
 
 ```bash
-home-manager switch --flake ~/dotfiles#$(whoami)
+home-manager switch --impure --flake ~/dotfiles#$(whoami)
 ```
 
 This installs `uv` and `gmail-mcp-auth`, and writes the MCP config to `~/.config/opencode/opencode.json`.
@@ -624,7 +714,7 @@ Ask OpenCode:
 [`scripts/setup-firecrawl.sh`](scripts/setup-firecrawl.sh) saves your Firecrawl API key for the MCP server configured by [`firecrawl.nix`](#firecrawlnix):
 
 ```bash
-# After home-manager switch --flake ~/dotfiles
+# After home-manager switch --impure --flake ~/dotfiles
 bash ~/dotfiles/scripts/setup-firecrawl.sh
 ```
 
@@ -641,7 +731,7 @@ Get your key from <https://www.firecrawl.dev/app/api-keys>. Restart OpenCode aft
 One-time setup to authenticate and enable Tailscale for auto-start on boot:
 
 ```bash
-# After home-manager switch --flake ~/dotfiles
+# After home-manager switch --impure --flake ~/dotfiles
 bash ~/dotfiles/scripts/setup-tailscale.sh
 ```
 
@@ -652,24 +742,28 @@ The script will:
 4. Create and enable a systemd `tailscaled.service` unit for auto-start on boot
 5. Write a `sudoers.d` file ensuring Nix binaries are on `secure_path` for sudo commands
 
+> **macOS:** install the app (`brew install --cask tailscale`); the same script launches it and runs `tailscale up`. The app manages the daemon and auto-starts it at login — no systemd unit or `sudoers` file is created.
+
 ### Immich Setup
 
 Immich runs as a Docker Compose stack configured by the [`immich.nix`](#immichnix) module. The compose file, `.env`, and directory scaffolding are created automatically on `home-manager switch`.
 
-**Prerequisites:** Docker daemon and CLI (installed via Home Manager — see [packages.nix](#packagesnix)), plus an HDD mounted at `/mnt/hdd` for photo storage.
+**Prerequisites:** Docker daemon and CLI (installed via Home Manager — see [packages.nix](#packagesnix)). On Linux an HDD mounted at `/mnt/hdd` stores photos; on macOS use Docker Desktop with the default `~/immich/library` location.
 
-**First-time setup:**
+**First-time setup (Linux):**
 
 ```bash
 # Link ~/immich/library -> /mnt/hdd/immich/library, start the daemon, pull, and start
 make -C ~/dotfiles immich-setup
 ```
 
-On a Debian system where the Docker daemon is not yet running, use the bootstrap script instead:
+On a Debian system where the Docker daemon is not yet running, use the bootstrap script instead (it also works on macOS, starting Docker Desktop):
 
 ```bash
 bash ~/dotfiles/scripts/setup-immich.sh
 ```
+
+> **macOS:** the HDD/Samba/backup make targets are Linux-only and exit with a message. Start the stack with `bash scripts/setup-immich.sh` (or `make -C ~/dotfiles immich-start`); the compose file omits device passthrough and hardware acceleration.
 
 Then open `http://<ip>:2283` to complete first-run setup.
 
@@ -702,26 +796,28 @@ Run `make -C ~/dotfiles help` for the full list of targets.
 
 ### Filebrowser Setup
 
-[`scripts/init-filebrowser.sh`](scripts/init-filebrowser.sh) is the one-shot, reproducible way to bring up Filebrowser on the RPi. It is idempotent and safe to re-run:
+[`scripts/init-filebrowser.sh`](scripts/init-filebrowser.sh) is the one-shot, reproducible way to bring up Filebrowser. It is idempotent and safe to re-run, and works on both platforms:
 
 ```bash
 bash ~/dotfiles/scripts/init-filebrowser.sh
 ```
 
 It will:
-1. Enable Nix flakes and apply the Home Manager flake (installing `filebrowser` + the systemd unit)
+1. Apply the Home Manager flake (installing `filebrowser` + the **systemd** unit on Linux or the **launchd** agent on macOS)
 2. **Prompt interactively for the admin password** (hidden input, confirmed, min 8 chars) — unless `FILEBROWSER_PASSWORD` is already set in the environment
 3. Ensure the Bolt DB exists, set the minimum password length to 8 and the TUS chunk size (default 2 GiB, override with `FILEBROWSER_TUS_CHUNK_SIZE`), then create-or-update the admin user
-4. Enable **linger** (`sudo loginctl enable-linger`) so the user service starts at boot even without a desktop/SSH login session
-5. Start + enable the service and print the local and network access URLs
+4. Start the service (on Linux it also enables **linger** via `sudo loginctl enable-linger` so the user service starts at boot without a login session)
+5. Print the local and network access URLs
 
-Access from the iPad: `http://<rpi-ip>:8080`.
+Access from another device: `http://<host-ip>:8080`.
 
 **Environment overrides:** `FILEBROWSER_PASSWORD`, `FILEBROWSER_USERNAME` (default `admin`), `FILEBROWSER_TUS_CHUNK_SIZE` (default `2147483648`).
 
 > **Note on boot persistence:** Home Manager fully manages the user-level unit (install, enable, restart on switch). The one thing it *cannot* do is enable **linger** — that's a root-level operation (`/var/lib/systemd/linger`), which is why the script performs it with `sudo`. Without linger, the service only starts once a desktop login session exists.
 
 ### Samba Shares
+
+> **Linux-only.** macOS shares files through System Settings → General → Sharing; `scripts/init-setup-samba` exits with a message there.
 
 [`scripts/init-setup-samba`](scripts/init-setup-samba) configures three Samba shares: the user's home share plus `hdd` (`/mnt/hdd`) and `ssd` (`/mnt/ssd`), accessible from the iPad via `smb://<ip>/hdd` and `smb://<ip>/ssd`. All shares use the `recycle` VFS module with `keeptree`, so deleted files land in a `.recycle` bin (`.recycle/<user>` for the home share) instead of being permanently removed. The `fruit`/`streams_xattr` modules for macOS/iPadOS compatibility (`ea support = yes`, `fruit:aapl = yes`) are only enabled where the backing filesystem supports extended attributes (the home share always; the `hdd`/`ssd` shares only on xattr-capable filesystems such as ext4 — skipped on exFAT/FAT32, where they'd break Apple-client directory listing).
 
@@ -785,21 +881,24 @@ It produces one EPUB per directory that directly contains markdown (mirroring th
 | `yt` | Download a 4K video via `download-vid.sh` |
 | `build-epubs` | Build EPUB books from the ~/interview-prep markdown tree |
 | `generate-ssh-key` | Generate an Ed25519 SSH key for a given email |
-| `bash ~/dotfiles/scripts/install-nix.sh` | Install Nix with --daemon on a fresh system |
+| `bash ~/dotfiles/scripts/install-nix.sh` | Install Nix (official `--daemon` on Linux, Determinate on macOS) |
+| `bash ~/dotfiles/scripts/init-home-manager.sh` | Apply the flake and set Fish as the login shell (no reboot on macOS) |
 | `bash ~/dotfiles/scripts/download-vid.sh` | Download a 4K video from a URL using yt-dlp + ffmpeg |
-| `bash ~/dotfiles/scripts/setup-tailscale.sh` | Authenticate Tailscale and enable auto-start on boot |
+| `bash ~/dotfiles/scripts/setup-tailscale.sh` | Authenticate Tailscale (systemd unit on Linux, app on macOS) |
 | `bash ~/dotfiles/scripts/opencode-serve.sh` | Expose OpenCode on the tailnet |
-| `make -C ~/dotfiles immich-setup` | First-time Immich setup (start daemon, link library, pull, start) |
-| `bash ~/dotfiles/scripts/setup-immich.sh` | Bootstrap Docker daemon and start Immich (Debian) |
+| `make -C ~/dotfiles immich-setup` | First-time Immich setup (start daemon, link library, pull, start) — *Linux* |
+| `bash ~/dotfiles/scripts/setup-immich.sh` | Bootstrap the Docker daemon and start Immich (Debian/macOS) |
 | `bash ~/dotfiles/scripts/setup-firecrawl.sh` | Save a Firecrawl API key for the MCP server (`~/.config/firecrawl/api-key`) |
-| `bash ~/dotfiles/scripts/init-filebrowser.sh` | One-shot reproducible Filebrowser setup (interactive password, enables boot linger) |
+| `bash ~/dotfiles/scripts/init-filebrowser.sh` | One-shot reproducible Filebrowser setup (systemd on Linux / launchd on macOS) |
 | `bash ~/dotfiles/scripts/add-subtitles.sh VIDEO srt` | Embed an `.srt` into a video as a soft subtitle track (`mov_text`) |
-| `bash ~/dotfiles/scripts/init-setup-hdd.sh` | Stop desktop auto-mount of the Immich HDD + auto-mount it at `/mnt/hdd` on re-insert (one-time) |
+| `bash ~/dotfiles/scripts/init-setup-hdd.sh` | Stop desktop auto-mount of the Immich HDD + auto-mount it at `/mnt/hdd` on re-insert (one-time) — *Linux* |
 | `make -C ~/dotfiles immich-sync DEST=DIR` | Sync Immich albums to an external drive |
-| `make -C ~/dotfiles immich-hdd-mount` | Mount `/mnt/hdd` rw (moves auto-mounted drives, recovers stale/read-only mounts) |
-| `make -C ~/dotfiles immich-hdd-undo` / `immich-ssd-undo` | Restore Samba recycle-bin deletes on `/mnt/hdd` / `/mnt/ssd` |
-| `make -C ~/dotfiles immich-hdd-backup` / `immich-ssd-backup` | Rotating snapshot backup of `/mnt/hdd` ↔ `/mnt/ssd` |
+| `make -C ~/dotfiles immich-hdd-mount` | Mount `/mnt/hdd` rw (moves auto-mounted drives, recovers stale/read-only mounts) — *Linux* |
+| `make -C ~/dotfiles immich-hdd-undo` / `immich-ssd-undo` | Restore Samba recycle-bin deletes on `/mnt/hdd` / `/mnt/ssd` — *Linux* |
+| `make -C ~/dotfiles immich-hdd-backup` / `immich-ssd-backup` | Rotating snapshot backup of `/mnt/hdd` ↔ `/mnt/ssd` — *Linux* |
 | `home-manager expire-generations 30d` | Garbage collect old Home Manager generations |
+
+> **Linux-only:** the HDD-mount, Samba recycle-bin, and drive-backup targets/scripts above exit with an explanatory message on macOS (no `/mnt/hdd`, no Samba server).
 
 ## Acknowledgements
 
