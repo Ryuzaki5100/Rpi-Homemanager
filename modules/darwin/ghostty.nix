@@ -1,4 +1,9 @@
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 
 let
   stateDir = "${config.home.homeDirectory}/.local/state/ghostty";
@@ -32,12 +37,17 @@ in
 
       # Font — nerd-fonts.jetbrains-mono is installed below.
       font-family = "JetBrainsMono Nerd Font";
-      font-size = 16;
+      font-size = 20;
       font-thicken = true;
 
       # Transparency + blur (the pretty stuff).
-      background-opacity = 0.92;
+      background-opacity = 0.8;
       background-blur = true;
+      # Apply the opacity above to app-painted cells too, not just the window
+      # background. Without this, a TUI that repaints the background (opencode,
+      # Neovim, tmux) stays fully opaque — this is what makes opencode
+      # see-through for *every* theme.
+      background-opacity-cells = true;
       window-colorspace = "display-p3";
 
       # Comfort / polish.
