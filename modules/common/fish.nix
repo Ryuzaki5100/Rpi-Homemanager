@@ -5,8 +5,8 @@
     enable = true;
 
     interactiveShellInit = ''
-      # Multi-user Nix (Linux) and the Determinate installer (macOS) both use
-      # this path; guard it so a single-user install does not error.
+      # The official multi-user Nix installer (Linux and macOS) uses this path;
+      # guard it so a single-user install does not error.
       if test -e /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.fish
         source /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.fish
       end

@@ -11,7 +11,7 @@ OS="$(uname -s)"
 
 echo "==> Enabling nix-command + flakes in /etc/nix/nix.conf..."
 # extra-experimental-features appends, so it does not override any existing
-# experimental-features set by the Determinate installer on macOS.
+# experimental-features set by the Nix installer.
 if ! grep -qE "^(extra-)?experimental-features = .*nix-command.*flakes" /etc/nix/nix.conf 2>/dev/null; then
     sudo mkdir -p /etc/nix
     echo "extra-experimental-features = nix-command flakes" | sudo tee -a /etc/nix/nix.conf >/dev/null

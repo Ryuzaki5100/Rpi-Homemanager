@@ -219,7 +219,7 @@ Exports a single session variable:
 Configures Fish as the login shell.
 
 **Interactive shell initialisation:**
-- Sources the Nix daemon profile for environment integration (existence-guarded so it works on both Nix and the Determinate installer)
+- Sources the Nix daemon profile for environment integration (existence-guarded so it works with the official multi-user install on Linux and macOS)
 - Re-exports `EDITOR` for shell sessions
 - Binds autosuggestion acceptance to multiple keys: **Ctrl+Space**, **Alt+Space**, **Alt+.**, and **Shift+Tab**
 
@@ -541,8 +541,8 @@ Builds [obsitui](https://github.com/atr0t0s/obsitui) — a terminal UI for brows
 - Home Manager installed
 
 > **On a truly fresh system without Nix**, run `bash ~/dotfiles/scripts/install-nix.sh` first.
-> It installs the official multi-user (`--daemon`) installer on Linux and the
-> Determinate Systems installer on macOS, then log out and back in before proceeding.
+> It installs the official multi-user (`--daemon`) Nix package manager on both Linux
+> and macOS, then log out and back in before proceeding.
 
 ### Installation
 
@@ -579,7 +579,7 @@ Both commands are aliased as `rebuild-home-manager` and `update-home-manager` fo
 
 The configuration is layered so Home Manager builds only the modules the host can run — see [Platform layers](#platform-layers). On Apple Silicon:
 
-1. **Install Nix** (Determinate installer):
+1. **Install Nix** (official multi-user installer):
    ```bash
    bash ~/dotfiles/scripts/install-nix.sh
    ```
@@ -881,7 +881,7 @@ It produces one EPUB per directory that directly contains markdown (mirroring th
 | `yt` | Download a 4K video via `download-vid.sh` |
 | `build-epubs` | Build EPUB books from the ~/interview-prep markdown tree |
 | `generate-ssh-key` | Generate an Ed25519 SSH key for a given email |
-| `bash ~/dotfiles/scripts/install-nix.sh` | Install Nix (official `--daemon` on Linux, Determinate on macOS) |
+| `bash ~/dotfiles/scripts/install-nix.sh` | Install the official multi-user Nix on Linux and macOS (`--daemon`) |
 | `bash ~/dotfiles/scripts/init-home-manager.sh` | Apply the flake and set Fish as the login shell (no reboot on macOS) |
 | `bash ~/dotfiles/scripts/download-vid.sh` | Download a 4K video from a URL using yt-dlp + ffmpeg |
 | `bash ~/dotfiles/scripts/setup-tailscale.sh` | Authenticate Tailscale (systemd unit on Linux, app on macOS) |
