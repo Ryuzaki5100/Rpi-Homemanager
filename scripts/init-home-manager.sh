@@ -3,16 +3,18 @@
 set -euo pipefail
 
 # Bootstrap Home Manager (standalone) on a fresh machine and set Fish as the
-# login shell. Linux enables flakes in /etc/nix/nix.conf; macOS relies on the
-# Determinate installer's defaults (install Nix first with scripts/install-nix.sh).
+# login shell. Enables the nix-command/flakes experimental features in
+# /etc/nix/nix.conf on both Linux and macOS (install Nix first with
+# scripts/install-nix.sh).
 
 OS="$(uname -s)"
 
-if [ "$OS" != "Darwin" ]; then
-    echo "==> Enabling flakes in /etc/nix/nix.conf..."
-    if ! grep -q "^experimental-features = .*nix-command.*flakes" /etc/nix/nix.conf 2>/dev/null; then
-        echo "experimental-features = nix-command flakes" | sudo tee -a /etc/nix/nix.conf >/dev/null
-    fi
+echo "==> Enabling nix-command + flakes in /etc/nix/nix.conf..."
+# extra-experimental-features appends, so it does not override any existing
+# experimental-features set by the Determinate installer on macOS.
+if ! grep -qE "^(extra-)?experimental-features = .*nix-command.*flakes" /etc/nix/nix.conf 2>/dev/null; then
+    sudo mkdir -p /etc/nix
+    echo "extra-experimental-features = nix-command flakes" | sudo tee -a /etc/nix/nix.conf >/dev/null
 fi
 
 echo "==> Applying Home Manager configuration..."
