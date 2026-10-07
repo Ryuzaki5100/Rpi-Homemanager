@@ -27,6 +27,7 @@
       ga = "git add .";
       op = "opencode";
       yt = "~/dotfiles/scripts/download-vid.sh";
+      build-epubs = "~/dotfiles/scripts/build-epubs.sh";
     };
 
     functions = {
