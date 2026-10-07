@@ -5,5 +5,6 @@
   imports = [
     ./packages.nix
     ./filebrowser.nix
+    ./ghostty.nix
   ];
 }

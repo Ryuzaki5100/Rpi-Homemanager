@@ -23,6 +23,7 @@ Personal Home Manager configuration for a terminal-centric workflow, shared acro
   - [immich.nix](#immichnix)
   - [filebrowser.nix](#filebrowsernix)
   - [obsidian.nix](#obsidiannix)
+  - [ghostty.nix](#ghosttynix)
   - [glow.nix](#glownix)
   - [epub.nix](#epubnix)
 - [Skills](#skills)
@@ -131,6 +132,7 @@ dotfiles/
 │   │   └── immich-hwaccel.nix # V4L2 decoder passthrough + HW transcode
 │   └── darwin/             # aarch64-darwin
 │       ├── filebrowser.nix    # launchd user agent
+│       ├── ghostty.nix        # Ghostty terminal, Nerd Font & ghostty-set-theme picker
 │       └── packages.nix       # macOS-only package set
 ├── glow/
 │   └── themes/            # glamour v2 theme JSONs (retro-orange, gruvbox, nord, tokyo-night, catppuccin-mocha, dracula, blood-red)
@@ -403,6 +405,24 @@ Sets up the Obsidian vault ecosystem for terminal-based note-taking.
   - Custom keybindings:
     - **Ctrl+E** — open current note in Nixvim
     - **Ctrl+Alt+E** — spawn Nixvim in a new terminal window for the current note
+
+### ghostty.nix
+
+Declarative configuration for the [Ghostty](https://ghostty.org) terminal (macOS layer), plus a live theme picker that mirrors the [`glow.nix`](#glownix) override pattern.
+
+- **Config location** — Home Manager writes `~/.config/ghostty/config` (an XDG path Ghostty reads on macOS).
+- **Package** — `pkgs.ghostty-bin` (the prebuilt 1.3.1 `.app` from nixpkgs) is installed, so no Homebrew cask is needed. Home Manager copies the bundle into `~/Applications/Home Manager Apps/Ghostty.app` and puts the `ghostty` CLI wrapper on `PATH`. Fish shell integration is enabled (Ghostty exports `$GHOSTTY_RESOURCES_DIR` to spawned shells).
+- **Font** — `nerd-fonts.jetbrains-mono` is installed (linked into `~/Library/Fonts/HomeManager/truetype/NerdFonts/JetBrainsMono`) and set as `font-family = "JetBrainsMono Nerd Font"` for glyph/icon coverage.
+- **Pretty defaults** — transparency + blur (`background-opacity = 0.92`, `background-blur = true`), Display P3 colors, window padding, block cursor, `copy-on-select = clipboard`, `mouse-hide-while-typing`, and `macos-option-as-alt`.
+- **Default theme** — `Catppuccin Mocha`.
+- **Runtime theme override** — the config includes `config-file = ?~/.local/state/ghostty/theme.ghostty`. Because Ghostty loads includes *after* the main file, the picker can change the active theme without editing the managed config, and the override survives `home-manager switch`.
+- **`ghostty-set-theme`** — a fish function that runs an `fzf` picker over `ghostty +list-themes --plain` (all 460+ built-ins plus any user themes in `~/.config/ghostty/themes`), with a live truecolor swatch preview rendered by the private `_ghostty-theme-preview` helper. Pass a name to set it directly, or `--reset` to fall back to the default.
+
+```bash
+ghostty-set-theme                     # fzf picker with live color preview
+ghostty-set-theme "TokyoNight Night"  # set directly
+ghostty-set-theme --reset             # back to Catppuccin Mocha
+```
 
 ### glow.nix
 
@@ -880,6 +900,7 @@ It produces one EPUB per directory that directly contains markdown (mirroring th
 | `ga` | `git add .` |
 | `yt` | Download a 4K video via `download-vid.sh` |
 | `build-epubs` | Build EPUB books from the ~/interview-prep markdown tree |
+| `ghostty-set-theme` | Pick a Ghostty theme via fzf (live preview); `--reset` for the default |
 | `generate-ssh-key` | Generate an Ed25519 SSH key for a given email |
 | `bash ~/dotfiles/scripts/install-nix.sh` | Install the official multi-user Nix on Linux and macOS (`--daemon`) |
 | `bash ~/dotfiles/scripts/init-home-manager.sh` | Apply the flake and set Fish as the login shell (no reboot on macOS) |
