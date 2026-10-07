@@ -10,6 +10,14 @@ let
       value.source = "${skillsDir}/${name}/SKILL.md";
     })
     skillNames);
+  guideConfigs = builtins.listToAttrs (builtins.concatMap
+    (name:
+      let guide = "${skillsDir}/${name}/GUIDE.md";
+      in lib.optional (builtins.pathExists guide) {
+        name = "opencode/skills/${name}/GUIDE.md";
+        value.source = guide;
+      })
+    skillNames);
 in {
   programs.opencode = {
     enable = true;
@@ -29,5 +37,5 @@ in {
     };
   };
 
-  xdg.configFile = skillConfigs;
+  xdg.configFile = skillConfigs // guideConfigs;
 }

@@ -21,6 +21,8 @@ in
     tmux
     zellij
     fzf
+    jdk
+    maven
 
     # Containers
     docker

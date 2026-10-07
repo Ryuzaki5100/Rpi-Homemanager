@@ -1,0 +1,24 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ai-era-mock-interview session state",
+  "type": "object",
+  "required": ["scenario", "topic", "difficulty", "source", "created"],
+  "properties": {
+    "scenario": { "type": "string" },
+    "topic": {
+      "type": "string",
+      "enum": ["data", "caching", "concurrency", "reliability", "security", "api-correctness", "performance", "observability"]
+    },
+    "difficulty": {
+      "type": "string",
+      "enum": ["junior", "mid", "architect", "senior-architect"]
+    },
+    "source": { "type": "string", "enum": ["curated", "generated"] },
+    "rounds": { "type": "integer", "minimum": 1 },
+    "sd_branching": { "type": "boolean" },
+    "sd_questions": { "type": "integer", "minimum": 0 },
+    "created": { "type": "string" },
+    "prompt_count": { "type": "integer", "minimum": 0 },
+    "status": { "type": "string", "enum": ["active", "completed"] }
+  }
+}
