@@ -29,6 +29,7 @@
       nixvim-editor = pkgs.callPackage ./pkgs/nixvim-editor.nix { };
       srl-tui = pkgs.callPackage ./pkgs/srl-tui.nix { };
       gmail-mcp-auth = pkgs.callPackage ./pkgs/gmail-mcp-auth.nix { };
+      bitchat-cli = pkgs.callPackage ./pkgs/bitchat-cli.nix { };
 
       pkgs' = import nixpkgs {
         inherit system;
@@ -36,13 +37,14 @@
           (final: prev: {
             srl-tui = prev.callPackage ./pkgs/srl-tui.nix { };
             gmail-mcp-auth = prev.callPackage ./pkgs/gmail-mcp-auth.nix { };
+            bitchat-cli = prev.callPackage ./pkgs/bitchat-cli.nix { };
           })
         ];
       };
     in
     {
       packages.${system} = {
-        inherit obsitui nixvim-editor srl-tui gmail-mcp-auth;
+        inherit obsitui nixvim-editor srl-tui gmail-mcp-auth bitchat-cli;
       };
 
       homeConfigurations.${userName} = home-manager.lib.homeManagerConfiguration {

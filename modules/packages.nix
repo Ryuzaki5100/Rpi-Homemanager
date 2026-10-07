@@ -53,6 +53,7 @@ in
     # Networking & chat
     browsh
     nchat
+    bitchat-cli
     bluetuith
     wifitui
     tailscale
