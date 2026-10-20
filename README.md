@@ -29,6 +29,8 @@ Personal Home Manager configuration for a terminal-centric workflow, shared acro
 - [Skills](#skills)
 - [Custom Packages](#custom-packages)
   - [nixvim-editor](#nixvim-editor)
+  - [dripfetch](#dripfetch)
+  - [archify](#archify)
   - [bitchat-cli](#bitchat-cli)
   - [gmail-mcp-auth](#gmail-mcp-auth)
   - [obsitui](#obsitui)
@@ -53,6 +55,7 @@ flake.nix  ──►  home.nix  ──►  modules/default.nix
                       │              └── darwin/          # aarch64-darwin
                       │
                       ├── pkgs/
+                      │     ├── archify.nix
                       │     ├── nixvim-editor.nix
                       │     ├── obsitui.nix
                       │     ├── gmail-mcp-auth.nix
@@ -61,6 +64,7 @@ flake.nix  ──►  home.nix  ──►  modules/default.nix
                       └── skills/
                             ├── ai-era-mock-interview/SKILL.md
                             ├── batch-resume-tailor/SKILL.md
+                            ├── content-to-diagram/SKILL.md
                             ├── daily-prep-questions/SKILL.md
                             ├── glow-theme-creator/SKILL.md
                             ├── hld-problems-generator/SKILL.md
@@ -68,19 +72,20 @@ flake.nix  ──►  home.nix  ──►  modules/default.nix
                             ├── skill-creator/SKILL.md
                             ├── system-design-tester/SKILL.md
                             ├── system-design-tutor/SKILL.md
+                            ├── tui-bubble-tea-creator/SKILL.md
                             ├── update-docs/SKILL.md
                             └── yt-summarizer/SKILL.md
 ```
 
 | Layer | Description |
 |---|---|
-| **`flake.nix`** | Entry point. Pins `nixpkgs` (nixos-unstable) and `home-manager`. Builds custom packages per system (`packages.<system>` for `x86_64-linux`, `aarch64-linux`, `aarch64-darwin`) and passes them as `extraSpecialArgs` into the module tree. The `homeConfigurations.<user>` output targets the current host. |
+| **`flake.nix`** | Entry point. Pins `nixpkgs` (nixos-unstable), `home-manager`, and the upstream `dripfetch` packaging flake. Builds custom packages per system (`packages.<system>` for `x86_64-linux`, `aarch64-linux`, `aarch64-darwin`) and passes them as `extraSpecialArgs` into the module tree. The `homeConfigurations.<user>` output targets the current host. |
 | **`home.nix`** | Thin shim; imports `modules/` and sets shared `nixpkgs.config`. |
 | **`modules/default.nix`** | The single platform-selection point. Imports `common/` always, plus the matching platform layer(s) based on `pkgs.stdenv.hostPlatform`. |
 | **`modules/common/`** | Modules and packages that build on **every** platform. |
 | **`modules/linux/`, `linux-aarch64/`, `darwin/`** | Platform-specific packages and services (see [Platform layers](#platform-layers)). |
 | **`pkgs/`** | Custom package derivations exported both as flake outputs and installed in the Home Manager profile. |
-| **`skills/`** | OpenCode skill definitions (`SKILL.md` files, plus optional `GUIDE.md` companions) deployed via `xdg.configFile` symlinks. |
+| **`skills/`** | OpenCode skill definitions. Each directory holds a router `SKILL.md` plus optional on-demand companions (`GUIDE.md`, `references/`, `scripts/`, `templates/`, `assets/`); the whole directory is deployed via `xdg.configFile` symlinks. |
 
 ### Dependencies
 
@@ -88,6 +93,7 @@ flake.nix  ──►  home.nix  ──►  modules/default.nix
 |---|---|
 | `nixpkgs` | `github:NixOS/nixpkgs/nixos-unstable` |
 | `home-manager` | `github:nix-community/home-manager` (follows `nixpkgs`) |
+| `dripfetch` | `github:a-shygun/dripfetch?dir=packaging/nix` (follows `nixpkgs`; patched locally to exit cleanly on Ctrl+C) |
 
 ### Custom Packages as Flake Outputs
 
@@ -98,6 +104,8 @@ nix run github:Ryuzaki5100/dotfiles#obsitui
 nix run github:Ryuzaki5100/dotfiles#nixvim-editor
 nix run github:Ryuzaki5100/dotfiles#gmail-mcp-auth
 nix run github:Ryuzaki5100/dotfiles#bitchat-cli
+nix run github:Ryuzaki5100/dotfiles#archify
+nix run github:Ryuzaki5100/dotfiles#dripfetch
 ```
 
 ## Structure
@@ -137,7 +145,9 @@ dotfiles/
 ├── glow/
 │   └── themes/            # glamour v2 theme JSONs (retro-orange, gruvbox, nord, tokyo-night, catppuccin-mocha, dracula, blood-red)
 ├── pkgs/
+│   ├── archify.nix        # Archify CLI + bundled authoring contract (upstream GitHub source)
 │   ├── bitchat-cli.nix    # bitchat CLI (PyPI, buildPythonApplication)
+│   ├── dripfetch-kbinterrupt.patch # Local patch: Ctrl+C exits dripfetch cleanly
 │   ├── gmail-mcp-auth.nix # Wrapper around gmail-mcp-auth.py (python + google-auth-oauthlib)
 │   ├── nixvim-editor.nix  # Thin wrapper around external Nixvim flake
 │   └── obsitui.nix        # Obsidian TUI from source (npm)
@@ -166,13 +176,15 @@ dotfiles/
 └── skills/
     ├── ai-era-mock-interview/ # OpenCode skill: AI-era mock interview on a buggy Java/Maven codebase
     ├── batch-resume-tailor/ # OpenCode skill: batch tailor resumes from job posting URLs
+    ├── content-to-diagram/ # OpenCode skill: turn content into one Archify HTML diagram
     ├── daily-prep-questions/ # OpenCode skill: daily no-repeat interview-prep set (LC/SD/behavioral/SQL/LLD)
     ├── glow-theme-creator/ # OpenCode skill: build glow themes from a described vibe
     ├── hld-problems-generator/ # OpenCode skill: synthesize HLD practice problems + EPUB
     ├── single-resume-tailor/ # OpenCode skill: ATS-optimized one-page resume from a JD
-    ├── skill-creator/     # OpenCode skill: interactive skill creation wizard
+    ├── skill-creator/     # OpenCode skill: interactive skill creation wizard (router pattern)
     ├── system-design-tester/ # OpenCode skill: generate timestamped SD test papers
     ├── system-design-tutor/ # OpenCode skill: answer keys, grading, and reasoning for SD tests
+    ├── tui-bubble-tea-creator/ # OpenCode skill: generate a Go Bubble Tea TUI from a spec
     ├── update-docs/       # OpenCode skill: auto-update docs from git changes
     └── yt-summarizer/     # OpenCode skill: summarize YouTube videos, export to markdown/EPUB
 ```
@@ -241,6 +253,9 @@ Configures Fish as the login shell.
 | `op` | `opencode` |
 | `yt` | `~/dotfiles/scripts/download-vid.sh` |
 | `build-epubs` | `~/dotfiles/scripts/build-epubs.sh` |
+| `sz` | `du -sh ` |
+| `opt` | `nix-store --optimise` |
+| `collect-garbage` | `nix-collect-garbage` |
 
 **Functions:**
 
@@ -263,8 +278,9 @@ Configures [OpenCode](https://opencode.ai) — an AI coding assistant — via `p
 - Defines a Firecrawl MCP server (`firecrawl-mcp`, **enabled**, keyed on `~/.config/firecrawl/api-key`) — see [`firecrawl.nix`](#firecrawlnix)
 
 **Skill deployment:**
-- Automatically discovers subdirectories under `skills/` and symlinks each `SKILL.md` into `~/.config/opencode/skills/<name>/`
-- Any `GUIDE.md` found alongside a `SKILL.md` is symlinked too, so candidate/human-facing guides (e.g. [`ai-era-mock-interview`](#ai-era-mock-interview)) ship with the skill
+- Automatically discovers subdirectories under `skills/` and symlinks **every file** inside each into `~/.config/opencode/skills/<name>/`, preserving the relative layout (so a router `SKILL.md` can route to `GUIDE.md`, `references/*.md`, `templates/`, and `scripts/` from its deployed base directory)
+- `.DS_Store` and other dotfiles are skipped; `scripts/*.sh` are marked executable
+- Because a Flake only sees files tracked by Git, **new skill files must be `git add`ed before `home-manager switch`** (untracked files are invisible to the build)
 - This makes locally-developed skills available to OpenCode without manual copying
 
 ### packages.nix
@@ -274,15 +290,16 @@ Declarative cross-platform package list installed via `home.packages` from [`mod
 | Category | Packages |
 |---|---|
 | Editors | `neovim`, `opencode` (`code-server` on Linux) |
-| Dev tools | `lazygit`, `tmux`, `zellij`, `fzf`, `jdk`, `maven` |
+| Dev tools | `lazygit`, `tmux`, `zellij`, `fzf`, `jdk`, `maven`, `devenv` |
 | Containers | `docker`, `docker-compose`, `jq` |
-| System info | `fastfetch`, `btop`, `clock-rs`, `smartmontools` (`nitch` on Linux) |
+| System info | `fastfetch`, `btop`, `clock-rs`, `dripfetch`, `smartmontools` (`nitch` on Linux) |
 | Media & graphics | `chafa`, `timg`, `mpv`, `ffmpeg`, `yt-dlp`, `yazi`, `pandoc`, `dysk`, `nix-search-tv` (`foliate` on Linux) |
-| Networking & chat | `browsh`, `nchat`, `bitchat-cli`, `tailscale`, `reddit-tui`, `reddix`, `discordo`, `wiki-tui`, `hackernews-tui`, `youtube-tui`, `smassh`, `gemini-cli`, `mangal` (`bluetuith`, `wifitui` on Linux) |
+| Networking & chat | `browsh`, `nchat`, `bitchat-cli`, `tailscale`, `reddit-tui`, `reddix`, `discordo`, `wiki-tui`, `hackernews-tui`, `youtube-tui`, `smassh`, `mangal` (`bluetuith`, `wifitui` on Linux) |
 | Obsidian TUIs | `basalt`, `obsitui`, `glow`, `nixvim-editor` |
+| Diagram generation | `archify` (also exports `ARCHIFY_ROOT` for the `content-to-diagram` skill) |
 | Fun | `cmatrix`, `posting`, `asciiquarium` |
 
-Platform-specific packages live in [`modules/linux/packages.nix`](modules/linux/packages.nix) (`code-server`, `nitch`, `bluetuith`, `wifitui`, `exfatprogs`, `foliate`) and [`modules/darwin/packages.nix`](modules/darwin/packages.nix). macOS uses `fastfetch` in place of `nitch`, and native Bluetooth/Wi-Fi/exFAT in place of the Linux TUIs.
+Platform-specific packages live in [`modules/linux/packages.nix`](modules/linux/packages.nix) (`code-server`, `nitch`, `bluetuith`, `wifitui`, `exfatprogs`, `foliate`, plus `vial` on `x86_64-linux`) and [`modules/darwin/packages.nix`](modules/darwin/packages.nix). macOS uses `fastfetch` in place of `nitch`, and native Bluetooth/Wi-Fi/exFAT in place of the Linux TUIs. `vial` is gated to `x86_64-linux` because nixpkgs does not build it for `aarch64-linux`.
 
 > **Note:** `localsend` is commented out because its Flutter dependency (`aapt`) doesn't support `aarch64-linux`. It will be re-enabled once upstream support lands.
 
@@ -413,7 +430,7 @@ Declarative configuration for the [Ghostty](https://ghostty.org) terminal (macOS
 - **Config location** — Home Manager writes `~/.config/ghostty/config` (an XDG path Ghostty reads on macOS).
 - **Package** — `pkgs.ghostty-bin` (the prebuilt 1.3.1 `.app` from nixpkgs) is installed, so no Homebrew cask is needed. Home Manager copies the bundle into `~/Applications/Home Manager Apps/Ghostty.app` and puts the `ghostty` CLI wrapper on `PATH`. Fish shell integration is enabled (Ghostty exports `$GHOSTTY_RESOURCES_DIR` to spawned shells).
 - **Font** — `nerd-fonts.jetbrains-mono` is installed (linked into `~/Library/Fonts/HomeManager/truetype/NerdFonts/JetBrainsMono`) and set as `font-family = "JetBrainsMono Nerd Font"` at `font-size = 20` with `font-thicken = true` for glyph/icon coverage.
-- **Pretty defaults** — transparency + blur (`background-opacity = 0.8`, `background-opacity-cells = true`, `background-blur = true`), Display P3 colors, window padding, block cursor, `copy-on-select = clipboard`, `mouse-hide-while-typing`, and `macos-option-as-alt`. `background-opacity-cells` extends the window opacity to app-painted cells, so TUIs that repaint the background (opencode, Neovim, tmux) are see-through for every theme instead of rendering opaque.
+- **Pretty defaults** — transparency + blur (`background-opacity = 0.7`, `background-opacity-cells = true`, `background-blur = true`), Display P3 colors, window padding, block cursor, `copy-on-select = clipboard`, `mouse-hide-while-typing`, and `macos-option-as-alt`. `background-opacity-cells` extends the window opacity to app-painted cells, so TUIs that repaint the background (opencode, Neovim, tmux) are see-through for every theme instead of rendering opaque.
 - **Default theme** — `Catppuccin Mocha`.
 - **Runtime theme override** — the config includes `config-file = ?~/.local/state/ghostty/theme.ghostty`. Because Ghostty loads includes *after* the main file, the picker can change the active theme without editing the managed config, and the override survives `home-manager switch`.
 - **`ghostty-set-theme`** — a fish function that runs an `fzf` picker over `ghostty +list-themes --plain` (all 460+ built-ins plus any user themes in `~/.config/ghostty/themes`), with a live truecolor swatch preview rendered by the private `_ghostty-theme-preview` helper. Pass a name to set it directly, or `--reset` to fall back to the default.
@@ -455,11 +472,19 @@ Declares the tooling used by [`scripts/build-epubs.sh`](scripts/build-epubs.sh) 
 
 ## Skills
 
-OpenCode skills are stored in `skills/` and auto-deployed to `~/.config/opencode/skills/<name>/` by the [`opencode.nix`](#opencodenix) module (any subdirectory with a `SKILL.md` is symlinked automatically).
+OpenCode skills are stored in `skills/` and auto-deployed to `~/.config/opencode/skills/<name>/` by the [`opencode.nix`](#opencodenix) module — every file in a skill directory is symlinked recursively, so a lean router `SKILL.md` can route to on-demand companions (`GUIDE.md`, `references/*.md`, `templates/`, `scripts/`) without bloating the always-loaded context.
 
 ### skill-creator
 
-Interactive wizard for creating new OpenCode skills — guides the agent through naming, scoping, and writing a `SKILL.md` in `skills/<name>/`.
+Interactive wizard for creating new OpenCode skills. It gathers the name, description, and behavior, picks a file topology (`single`, `router+guide`, or `router+references`), then writes a context-efficient `SKILL.md` router with a **Files & routing** table plus any on-demand `GUIDE.md`/`references/`/`scripts/`/`templates/` companions, and validates the result. The full pattern (templates, budget rules, worked example) lives in the skill's `GUIDE.md`.
+
+### content-to-diagram
+
+Turns pasted text, a Markdown file, notes, a README, an article, a transcript, a PDF, or any other readable document into a validated, interactive [Archify](https://github.com/tt-a1i/archify) HTML diagram. It always asks which of Archify's ten diagram types to use, then reads the relevant schema and example from the installed package. The clean pipeline keeps all intermediates in a disposable `$TMPDIR` workspace, runs `validate` → `render` → `check`, and moves only the finished `<slug>.html` into the requested directory — no candidate JSON, `.archify/` folder, delivery receipt, or browser-check sidecar is left beside it.
+
+### tui-bubble-tea-creator
+
+Builds a complete Go TUI (Bubble Tea + Bubbles + Lip Gloss) from a specification — supplied as a path to a markdown spec or inline in the prompt. The router `SKILL.md` inlines the non-negotiable Elm-architecture rules and drives a staged, stop-and-verify build (skeleton + devenv/flake/justfile → navigation → data → features → polish), while the full playbook (vim keymap, pending-key buffer, layout/resize, testing, packaging, CI) is read on demand from its `GUIDE.md`.
 
 ### ai-era-mock-interview
 
@@ -522,6 +547,23 @@ nix run github:Ryuzaki5100/nixvim --refresh -- "$@"
 ```
 
 Used as the system `EDITOR` and referenced by Basalt keybindings for opening notes.
+
+### dripfetch
+
+Installs [dripfetch](https://github.com/a-shygun/dripfetch) from the upstream `packaging/nix` flake input. The package is overridden with [`pkgs/dripfetch-kbinterrupt.patch`](pkgs/dripfetch-kbinterrupt.patch) so `Ctrl+C` exits cleanly instead of dumping a `KeyboardInterrupt` traceback from its `run()` loop. It is part of the common package set and is also exposed under `packages.<system>`.
+
+### archify
+
+Packages [Archify](https://github.com/tt-a1i/archify) — a zero-runtime-dependency Node CLI that renders validated, interactive HTML diagrams — from a pinned upstream GitHub source.
+
+| Attribute | Value |
+|---|---|
+| Source | `github:tt-a1i/archify` at `v3.2.0` (commit `208acba8d412335185b2056fedf54b3405df43fb`) |
+| Build | `fetchFromGitHub` + `makeWrapper` (no npm install; the CLI has no runtime npm dependencies) |
+| Runtime | Node.js from nixpkgs |
+| Bundled data | `SKILL.md`, schemas, examples, renderers, and locales under `$out/share/archify` |
+
+The wrapper exports `ARCHIFY_ROOT` so the [`content-to-diagram`](#content-to-diagram) skill can read Archify's own authoring contract, and sets `ARCHIFY_UPDATE_CHECK_DISABLED=1` because versions are managed by Nix. The skill's clean pipeline uses `validate`, `render`, and `check` and leaves only the final HTML.
 
 ### bitchat-cli
 
