@@ -10,5 +10,7 @@
     wifitui
     exfatprogs
     foliate # GTK/WebKitGTK ebook reader; webkitgtk is broken on aarch64-darwin
+  ] ++ pkgs.lib.optionals (pkgs.stdenv.hostPlatform.system == "x86_64-linux") [
+    vial # keyboard configurator; x86_64-linux build only in nixpkgs
   ];
 }

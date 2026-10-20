@@ -41,7 +41,7 @@ in
       font-thicken = true;
 
       # Transparency + blur (the pretty stuff).
-      background-opacity = 0.8;
+      background-opacity = 0.7;
       background-blur = true;
       # Apply the opacity above to app-painted cells too, not just the window
       # background. Without this, a TUI that repaints the background (opencode,
