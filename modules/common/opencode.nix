@@ -2,22 +2,32 @@
 
 let
   skillsDir = ../../skills;
-  skillDirs = builtins.readDir skillsDir;
-  skillNames = builtins.attrNames (lib.filterAttrs (name: type: type == "directory") skillDirs);
-  skillConfigs = builtins.listToAttrs (builtins.map
-    (name: {
-      name = "opencode/skills/${name}/SKILL.md";
-      value.source = "${skillsDir}/${name}/SKILL.md";
+
+  # Every file under skills/ is deployed, preserving the relative layout, so a
+  # skill can route to SKILL.md, GUIDE.md, references/*.md, templates/ and
+  # scripts/ from its deployed base directory (not just SKILL.md + GUIDE.md).
+  allFiles = lib.filesystem.listFilesRecursive skillsDir;
+  relPath = path: lib.removePrefix "${toString skillsDir}/" (toString path);
+
+  # Only files nested inside a skill directory (>=2 path segments) and not
+  # dotfiles like .DS_Store.
+  isSkillFile = path:
+    let rel = relPath path;
+    in lib.hasInfix "/" rel
+       && !(lib.hasPrefix "." (baseNameOf rel))
+       && !(lib.hasInfix "/." rel);
+
+  # Keep scripts executable after being symlinked out of the Nix store.
+  isScript = path:
+    let rel = relPath path;
+    in lib.hasSuffix ".sh" rel || lib.hasInfix "/scripts/" rel;
+
+  skillFiles = builtins.listToAttrs (map
+    (path: {
+      name = "opencode/skills/${relPath path}";
+      value = { source = path; } // lib.optionalAttrs (isScript path) { executable = true; };
     })
-    skillNames);
-  guideConfigs = builtins.listToAttrs (builtins.concatMap
-    (name:
-      let guide = "${skillsDir}/${name}/GUIDE.md";
-      in lib.optional (builtins.pathExists guide) {
-        name = "opencode/skills/${name}/GUIDE.md";
-        value.source = guide;
-      })
-    skillNames);
+    (builtins.filter isSkillFile allFiles));
 in {
   programs.opencode = {
     enable = true;
@@ -37,5 +47,5 @@ in {
     };
   };
 
-  xdg.configFile = skillConfigs // guideConfigs;
+  xdg.configFile = skillFiles;
 }
