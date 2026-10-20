@@ -1,0 +1,11 @@
+--- a/src/dripfetch/app/app.py
++++ b/src/dripfetch/app/app.py
+@@ -165,6 +165,8 @@
+             stdscr.timeout(10)
+             while self.handle_key(stdscr.getch()):
+                 self.update()
++        except KeyboardInterrupt:
++            pass
+         finally:
+             if self.box:
+                 self.box.close()

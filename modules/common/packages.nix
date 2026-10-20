@@ -22,6 +22,7 @@
     fzf
     jdk
     maven
+    devenv
 
     # Containers (CLI; the daemon is provided by the host / Docker Desktop)
     docker
@@ -32,6 +33,7 @@
     fastfetch
     btop
     clock-rs
+    dripfetch
     smartmontools
 
     # Media & graphics
@@ -58,7 +60,6 @@
     hackernews-tui
     youtube-tui
     smassh
-    gemini-cli
     mangal
     # ani-cli
     # nyaa
@@ -77,7 +78,14 @@
     posting
     asciiquarium
 
+    # Diagram generation
+    archify
+
     # Automation tools
     # openclaw
   ];
+
+  # Expose Archify's bundled authoring contract (SKILL.md, schemas, examples)
+  # to agents that generate diagrams through the CLI.
+  home.sessionVariables.ARCHIFY_ROOT = "${pkgs.archify}/share/archify";
 }

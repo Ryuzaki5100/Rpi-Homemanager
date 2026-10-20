@@ -7,12 +7,17 @@
       url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    dripfetch = {
+      url = "github:a-shygun/dripfetch?dir=packaging/nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
     {
       nixpkgs,
       home-manager,
+      dripfetch,
       ...
     }:
     let
@@ -44,6 +49,12 @@
               srl-tui = prev.callPackage ./pkgs/srl-tui.nix { };
               gmail-mcp-auth = prev.callPackage ./pkgs/gmail-mcp-auth.nix { };
               bitchat-cli = prev.callPackage ./pkgs/bitchat-cli.nix { };
+              archify = prev.callPackage ./pkgs/archify.nix { };
+              # Patch upstream so Ctrl+C exits cleanly instead of dumping a
+              # KeyboardInterrupt traceback (its run() loop only has a finally).
+              dripfetch = dripfetch.packages.${system}.default.overrideAttrs (old: {
+                patches = (old.patches or [ ]) ++ [ ./pkgs/dripfetch-kbinterrupt.patch ];
+              });
             })
           ];
         };
@@ -69,6 +80,8 @@
             srl-tui
             gmail-mcp-auth
             bitchat-cli
+            archify
+            dripfetch
             ;
         }
       );

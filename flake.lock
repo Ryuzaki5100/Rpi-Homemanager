@@ -1,5 +1,27 @@
 {
   "nodes": {
+    "dripfetch": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "dir": "packaging/nix",
+        "lastModified": 1791282760,
+        "narHash": "sha256-7mCFm2CScczn9LW5uGykeLwcsL3jhwsKdKTxszQG51Y=",
+        "owner": "a-shygun",
+        "repo": "dripfetch",
+        "rev": "89f285986fee59ec37316f2ecd6e43664ea10b44",
+        "type": "github"
+      },
+      "original": {
+        "dir": "packaging/nix",
+        "owner": "a-shygun",
+        "repo": "dripfetch",
+        "type": "github"
+      }
+    },
     "home-manager": {
       "inputs": {
         "nixpkgs": [
@@ -38,6 +60,7 @@
     },
     "root": {
       "inputs": {
+        "dripfetch": "dripfetch",
         "home-manager": "home-manager",
         "nixpkgs": "nixpkgs"
       }
