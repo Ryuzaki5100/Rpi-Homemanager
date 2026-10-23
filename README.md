@@ -68,6 +68,7 @@ flake.nix  ──►  home.nix  ──►  modules/default.nix
                             ├── daily-prep-questions/SKILL.md
                             ├── glow-theme-creator/SKILL.md
                             ├── hld-problems-generator/SKILL.md
+                            ├── manga-merger/SKILL.md
                             ├── single-resume-tailor/SKILL.md
                             ├── skill-creator/SKILL.md
                             ├── system-design-tester/SKILL.md
@@ -94,6 +95,7 @@ flake.nix  ──►  home.nix  ──►  modules/default.nix
 | `nixpkgs` | `github:NixOS/nixpkgs/nixos-unstable` |
 | `home-manager` | `github:nix-community/home-manager` (follows `nixpkgs`) |
 | `dripfetch` | `github:a-shygun/dripfetch?dir=packaging/nix` (follows `nixpkgs`; patched locally to exit cleanly on Ctrl+C) |
+| `pebble` | `github:pebble-dev/pebble.nix` (supplies the builder expressions; the SDK core, toolchain, QEMU, and Python/Node deps are packaged locally) |
 
 ### Custom Packages as Flake Outputs
 
@@ -130,6 +132,7 @@ dotfiles/
 │   │   ├── mangal.nix         # Mangal downloader config
 │   │   ├── obsidian.nix       # Obsidian vaults & Basalt config
 │   │   ├── opencode.nix       # OpenCode config, MCP settings & skill deployment
+│   │   ├── pebble.nix         # Pebble SDK/tool/QEMU wiring and SDK activation
 │   │   └── packages.nix       # Cross-platform package set
 │   ├── linux/              # x86_64-linux + aarch64-linux
 │   │   ├── filebrowser.nix    # systemd user unit
@@ -180,6 +183,17 @@ dotfiles/
     ├── daily-prep-questions/ # OpenCode skill: daily no-repeat interview-prep set (LC/SD/behavioral/SQL/LLD)
     ├── glow-theme-creator/ # OpenCode skill: build glow themes from a described vibe
     ├── hld-problems-generator/ # OpenCode skill: synthesize HLD practice problems + EPUB
+    ├── manga-merger/      # OpenCode skill: merge manga image folders into a fixed-layout EPUB
+    ├── pebble-app/        # OpenCode skill: orchestrate a Pebble watchface/watchapp build
+    ├── pebble-core/       # OpenCode skill: shared Pebble platform/docs/sample references
+    ├── pebble-sdk-setup/  # OpenCode skill: Nix SDK, QEMU, and environment verification
+    ├── pebble-project-scaffold/ # OpenCode skill: Pebble project metadata + skeleton
+    ├── pebble-ui-design/  # OpenCode skill: pixel-accurate Pebble layout spec
+    ├── pebble-c-dev/      # OpenCode skill: C watchfaces/watchapps
+    ├── pebble-alloy-dev/  # OpenCode skill: Alloy (JS) watchfaces/watchapps
+    ├── pebble-phone/      # OpenCode skill: PebbleKit JS + Clay
+    ├── pebble-build-test/ # OpenCode skill: build, emulator, screenshot QA
+    ├── pebble-release/    # OpenCode skill: icons, GIF, store publishing
     ├── single-resume-tailor/ # OpenCode skill: ATS-optimized one-page resume from a JD
     ├── skill-creator/     # OpenCode skill: interactive skill creation wizard (router pattern)
     ├── system-design-tester/ # OpenCode skill: generate timestamped SD test papers
@@ -290,7 +304,7 @@ Declarative cross-platform package list installed via `home.packages` from [`mod
 | Category | Packages |
 |---|---|
 | Editors | `neovim`, `opencode` (`code-server` on Linux) |
-| Dev tools | `lazygit`, `tmux`, `zellij`, `fzf`, `jdk`, `maven`, `devenv` |
+| Dev tools | `lazygit`, `tmux`, `zellij`, `fzf`, `jdk`, `maven`, `devenv`, `cmake`, `ninja`, `autoconf`, `automake`, `libtool`, `pkg-config` |
 | Containers | `docker`, `docker-compose`, `jq` |
 | System info | `fastfetch`, `btop`, `clock-rs`, `dripfetch`, `smartmontools` (`nitch` on Linux) |
 | Media & graphics | `chafa`, `timg`, `mpv`, `ffmpeg`, `yt-dlp`, `yazi`, `pandoc`, `dysk`, `nix-search-tv` (`foliate` on Linux) |
@@ -299,7 +313,7 @@ Declarative cross-platform package list installed via `home.packages` from [`mod
 | Diagram generation | `archify` (also exports `ARCHIFY_ROOT` for the `content-to-diagram` skill) |
 | Fun | `cmatrix`, `posting`, `asciiquarium` |
 
-Platform-specific packages live in [`modules/linux/packages.nix`](modules/linux/packages.nix) (`code-server`, `nitch`, `bluetuith`, `wifitui`, `exfatprogs`, `foliate`, plus `vial` on `x86_64-linux`) and [`modules/darwin/packages.nix`](modules/darwin/packages.nix). macOS uses `fastfetch` in place of `nitch`, and native Bluetooth/Wi-Fi/exFAT in place of the Linux TUIs. `vial` is gated to `x86_64-linux` because nixpkgs does not build it for `aarch64-linux`.
+Platform-specific packages live in [`modules/linux/packages.nix`](modules/linux/packages.nix) (`code-server`, `nitch`, `bluetuith`, `wifitui`, `exfatprogs`, `foliate`, plus `vial` on `x86_64-linux`) and [`modules/darwin/packages.nix`](modules/darwin/packages.nix). macOS uses `fastfetch` in place of `nitch`, and native Bluetooth/Wi-Fi/exFAT in place of the Linux TUIs. `vial` is gated to `x86_64-linux` because nixpkgs does not build it for `aarch64-linux`. macOS additionally installs Qt 6 base/charts, FFmpeg development outputs, `glslang`, `spirv-tools`, and `zstd` (plus its dev output) for building Eden.
 
 > **Note:** `localsend` is commented out because its Flutter dependency (`aapt`) doesn't support `aarch64-linux`. It will be re-enabled once upstream support lands.
 
@@ -478,9 +492,17 @@ OpenCode skills are stored in `skills/` and auto-deployed to `~/.config/opencode
 
 Interactive wizard for creating new OpenCode skills. It gathers the name, description, and behavior, picks a file topology (`single`, `router+guide`, or `router+references`), then writes a context-efficient `SKILL.md` router with a **Files & routing** table plus any on-demand `GUIDE.md`/`references/`/`scripts/`/`templates/` companions, and validates the result. The full pattern (templates, budget rules, worked example) lives in the skill's `GUIDE.md`.
 
+### Pebble suite
+
+`pebble-app` is the orchestrator for a 10-skill suite that builds Pebble watchfaces and watchapps end to end: classify the request, scaffold metadata, design a pixel-accurate layout, implement in C or Alloy, add PebbleKit JS/Clay phone code, build and verify on the emery emulator, then generate release assets. The Pebble SDK core, ARM/Moddable toolchain, QEMU, Python and Node environments are all Nix-packaged; `pebble sdk install` is not used. Supporting skills are `pebble-core`, `pebble-sdk-setup`, `pebble-project-scaffold`, `pebble-ui-design`, `pebble-c-dev`, `pebble-alloy-dev`, `pebble-phone`, `pebble-build-test`, and `pebble-release`.
+
 ### content-to-diagram
 
 Turns pasted text, a Markdown file, notes, a README, an article, a transcript, a PDF, or any other readable document into a validated, interactive [Archify](https://github.com/tt-a1i/archify) HTML diagram. It always asks which of Archify's ten diagram types to use, then reads the relevant schema and example from the installed package. The clean pipeline keeps all intermediates in a disposable `$TMPDIR` workspace, runs `validate` → `render` → `check`, and moves only the finished `<slug>.html` into the requested directory — no candidate JSON, `.archify/` folder, delivery receipt, or browser-check sidecar is left beside it.
+
+### manga-merger
+
+Merges a directory of per-chapter/volume image folders into one Apple Books-compatible fixed-layout EPUB in the current working directory. It discovers pages with natural numeric ordering (`Ch.0001.1` < `Ch.0001.2` < `Ch.0002`; `2.jpg` < `10.jpg`), builds chapters from folder names, letterboxes every page onto one shared canvas so Apple Books does not clip them, and validates the ZIP/mimetype/spine/image count before reporting. The bundled `scripts/build_epub.py` is Python 3 stdlib only — no Calibre, Pillow, or ImageMagick needed.
 
 ### tui-bubble-tea-creator
 
