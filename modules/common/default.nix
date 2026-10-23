@@ -10,6 +10,7 @@
     ./fish.nix
     ./packages.nix
     ./opencode.nix
+    ./pebble.nix
     ./gmail-mcp.nix
     ./firecrawl.nix
     ./obsidian.nix

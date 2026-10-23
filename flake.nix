@@ -11,6 +11,10 @@
       url = "github:a-shygun/dripfetch?dir=packaging/nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    pebble = {
+      url = "github:pebble-dev/pebble.nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
@@ -18,6 +22,7 @@
       nixpkgs,
       home-manager,
       dripfetch,
+      pebble,
       ...
     }:
     let
@@ -43,19 +48,48 @@
         import nixpkgs {
           inherit system;
           overlays = [
-            (final: prev: {
-              obsitui = prev.callPackage ./pkgs/obsitui.nix { };
-              nixvim-editor = prev.callPackage ./pkgs/nixvim-editor.nix { };
-              srl-tui = prev.callPackage ./pkgs/srl-tui.nix { };
-              gmail-mcp-auth = prev.callPackage ./pkgs/gmail-mcp-auth.nix { };
-              bitchat-cli = prev.callPackage ./pkgs/bitchat-cli.nix { };
-              archify = prev.callPackage ./pkgs/archify.nix { };
-              # Patch upstream so Ctrl+C exits cleanly instead of dumping a
-              # KeyboardInterrupt traceback (its run() loop only has a finally).
-              dripfetch = dripfetch.packages.${system}.default.overrideAttrs (old: {
-                patches = (old.patches or [ ]) ++ [ ./pkgs/dripfetch-kbinterrupt.patch ];
-              });
-            })
+            (final: prev:
+              let
+                pebblePython = prev.python3.override {
+                  packageOverrides = pyFinal: pyPrev: {
+                    libpebble2 = pyFinal.callPackage "${pebble}/derivations/libpebble2.nix" { };
+                    rsa = pyPrev.rsa.overrideAttrs (old: {
+                      version = "4.9.1";
+                      src = prev.fetchPypi {
+                        pname = "rsa";
+                        version = "4.9.1";
+                        hash = "sha256-572/21SX2kwH39NVMOGpAmWdtv8kHjnZlTytBuvQrnU=";
+                      };
+                      doCheck = false;
+                      dontCheck = true;
+                      checkPhase = "true";
+                      pytestCheckPhase = "true";
+                    });
+                  };
+                };
+                pypkjs = prev.callPackage ./pkgs/pypkjs.nix {
+                  python3Packages = pebblePython.pkgs;
+                };
+              in
+              {
+                obsitui = prev.callPackage ./pkgs/obsitui.nix { };
+                nixvim-editor = prev.callPackage ./pkgs/nixvim-editor.nix { };
+                srl-tui = prev.callPackage ./pkgs/srl-tui.nix { };
+                gmail-mcp-auth = prev.callPackage ./pkgs/gmail-mcp-auth.nix { };
+                bitchat-cli = prev.callPackage ./pkgs/bitchat-cli.nix { };
+                archify = prev.callPackage ./pkgs/archify.nix { };
+                pebble-sdk = prev.callPackage ./pkgs/pebble-sdk { };
+                inherit pypkjs;
+                pebble-tool = prev.callPackage ./pkgs/pebble-tool.nix {
+                  inherit pebble pypkjs;
+                  python3Packages = pebblePython.pkgs;
+                };
+                # Patch upstream so Ctrl+C exits cleanly instead of dumping a
+                # KeyboardInterrupt traceback (its run() loop only has a finally).
+                dripfetch = dripfetch.packages.${system}.default.overrideAttrs (old: {
+                  patches = (old.patches or [ ]) ++ [ ./pkgs/dripfetch-kbinterrupt.patch ];
+                });
+              })
           ];
         };
 
@@ -82,6 +116,9 @@
             bitchat-cli
             archify
             dripfetch
+            pebble-sdk
+            pebble-tool
+            pypkjs
             ;
         }
       );
@@ -97,6 +134,7 @@
           # `imports` evaluation (module args from _module.args would recurse).
           inherit pkgs;
           inherit (pkgs) obsitui nixvim-editor;
+          inherit pebble;
         };
       };
     };
