@@ -1,0 +1,21 @@
+{
+  "name": "",
+  "displayName": "",
+  "author": "",
+  "type": "watchface",
+  "language": "C",
+  "platforms": ["emery"],
+  "phone": "none",
+  "publish": false,
+  "phase": "preflight",
+  "gates": {
+    "environment": false,
+    "metadata": false,
+    "design": false,
+    "build": false,
+    "visual": false,
+    "interaction": false,
+    "phone": false,
+    "assets": false
+  }
+}
