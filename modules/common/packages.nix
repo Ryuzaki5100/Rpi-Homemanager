@@ -23,6 +23,12 @@
     jdk
     maven
     devenv
+    cmake
+    ninja
+    autoconf
+    automake
+    libtool
+    pkg-config
 
     # Containers (CLI; the daemon is provided by the host / Docker Desktop)
     docker
