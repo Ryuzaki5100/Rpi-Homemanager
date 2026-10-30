@@ -32,6 +32,7 @@
       op = "opencode";
       yt = "~/dotfiles/scripts/download-vid.sh";
       build-epubs = "~/dotfiles/scripts/build-epubs.sh";
+      crt = "retrocrt";
       sz = "du -sh ";
       opt = "nix-store --optimise";
       collect-garbage = "nix-collect-garbage";

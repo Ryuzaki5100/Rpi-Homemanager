@@ -16,6 +16,7 @@
     ./obsidian.nix
     ./glow.nix
     ./epub.nix
+    ./retrocrt.nix
     ./immich.nix
     ./filebrowser.nix
     ./mangal.nix

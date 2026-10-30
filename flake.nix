@@ -78,6 +78,7 @@
                 gmail-mcp-auth = prev.callPackage ./pkgs/gmail-mcp-auth.nix { };
                 bitchat-cli = prev.callPackage ./pkgs/bitchat-cli.nix { };
                 archify = prev.callPackage ./pkgs/archify.nix { };
+                retrocrt = prev.callPackage ./pkgs/retrocrt.nix { };
                 pebble-sdk = prev.callPackage ./pkgs/pebble-sdk { };
                 inherit pypkjs;
                 pebble-tool = prev.callPackage ./pkgs/pebble-tool.nix {
@@ -115,6 +116,7 @@
             gmail-mcp-auth
             bitchat-cli
             archify
+            retrocrt
             dripfetch
             pebble-sdk
             pebble-tool

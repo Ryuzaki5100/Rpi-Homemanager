@@ -26,6 +26,7 @@ Personal Home Manager configuration for a terminal-centric workflow, shared acro
   - [ghostty.nix](#ghosttynix)
   - [glow.nix](#glownix)
   - [epub.nix](#epubnix)
+  - [retrocrt.nix](#retrocrtnix)
 - [Skills](#skills)
 - [Custom Packages](#custom-packages)
   - [nixvim-editor](#nixvim-editor)
@@ -34,6 +35,7 @@ Personal Home Manager configuration for a terminal-centric workflow, shared acro
   - [bitchat-cli](#bitchat-cli)
   - [gmail-mcp-auth](#gmail-mcp-auth)
   - [obsitui](#obsitui)
+  - [retrocrt](#retrocrt)
 - [Quick Start](#quick-start)
   - [macOS Support](#macos-support)
   - [Gmail MCP Setup](#gmail-mcp-setup)
@@ -59,7 +61,8 @@ flake.nix  ──►  home.nix  ──►  modules/default.nix
                       │     ├── nixvim-editor.nix
                       │     ├── obsitui.nix
                       │     ├── gmail-mcp-auth.nix
-                      │     └── bitchat-cli.nix
+                      │     ├── bitchat-cli.nix
+                      │     └── retrocrt.nix
                       │
                       └── skills/
                             ├── ai-era-mock-interview/SKILL.md
@@ -107,6 +110,7 @@ nix run github:Ryuzaki5100/dotfiles#nixvim-editor
 nix run github:Ryuzaki5100/dotfiles#gmail-mcp-auth
 nix run github:Ryuzaki5100/dotfiles#bitchat-cli
 nix run github:Ryuzaki5100/dotfiles#archify
+nix run github:Ryuzaki5100/dotfiles#retrocrt
 nix run github:Ryuzaki5100/dotfiles#dripfetch
 ```
 
@@ -133,6 +137,7 @@ dotfiles/
 │   │   ├── obsidian.nix       # Obsidian vaults & Basalt config
 │   │   ├── opencode.nix       # OpenCode config, MCP settings & skill deployment
 │   │   ├── pebble.nix         # Pebble SDK/tool/QEMU wiring and SDK activation
+│   │   ├── retrocrt.nix       # retrocrt CLI (CRT/VHS video styliser)
 │   │   └── packages.nix       # Cross-platform package set
 │   ├── linux/              # x86_64-linux + aarch64-linux
 │   │   ├── filebrowser.nix    # systemd user unit
@@ -153,7 +158,8 @@ dotfiles/
 │   ├── dripfetch-kbinterrupt.patch # Local patch: Ctrl+C exits dripfetch cleanly
 │   ├── gmail-mcp-auth.nix # Wrapper around gmail-mcp-auth.py (python + google-auth-oauthlib)
 │   ├── nixvim-editor.nix  # Thin wrapper around external Nixvim flake
-│   └── obsitui.nix        # Obsidian TUI from source (npm)
+│   ├── obsitui.nix        # Obsidian TUI from source (npm)
+│   └── retrocrt.nix       # Wrapper pinning ffmpeg, Pillow and the timestamp font
 ├── scripts/
 │   ├── add-subtitles.sh        # Embed an .srt into a video as a soft subtitle track
 │   ├── backup-drive.sh        # Rotating hardlink snapshot backup of a mount
@@ -168,6 +174,7 @@ dotfiles/
 │   ├── opencode-serve.sh      # Launch opencode serve and expose on tailnet
 │   ├── download-vid.sh        # Download 4K video with yt-dlp and ffmpeg
 │   ├── epub-preprocess.py     # Preprocess markdown (links, HTML tags, diagram fences) for pandoc
+│   ├── retrocrt.py            # CRT/VHS video styliser (curved bezel, scanlines, timestamp)
 │   ├── samba-recycle-restore.sh # Restore files from a Samba recycle bin
 │   ├── setup-gmail-mcp.sh     # Interactive Gmail MCP setup wizard
 │   ├── setup-firecrawl.sh     # Save a Firecrawl API key for the MCP server
@@ -267,6 +274,7 @@ Configures Fish as the login shell.
 | `op` | `opencode` |
 | `yt` | `~/dotfiles/scripts/download-vid.sh` |
 | `build-epubs` | `~/dotfiles/scripts/build-epubs.sh` |
+| `crt` | `retrocrt` (CRT/VHS video styliser) |
 | `sz` | `du -sh ` |
 | `opt` | `nix-store --optimise` |
 | `collect-garbage` | `nix-collect-garbage` |
@@ -484,6 +492,192 @@ Declares the tooling used by [`scripts/build-epubs.sh`](scripts/build-epubs.sh) 
 
 `pandoc` (the actual converter) already lives in [`packages.nix`](#packagesnix).
 
+### retrocrt.nix
+
+Installs [`retrocrt`](scripts/retrocrt.py) — a video styliser that wraps a clip in a thick curved CRT bezel, gently degrades the picture, and stamps it with a camcorder-style date, wall clock, and video timecode. Anything ffmpeg can read is a valid input (mp4, mkv, mov, webm, ts, …).
+
+`pkgs/retrocrt.nix` pins everything the script needs so it behaves the same on macOS and Linux:
+
+| Component | Why it is pinned |
+|---|---|
+| `ffmpeg` | All pixel work: scaling, bloom, scanlines, grain, displacement wobble, glitch, lens curvature, vignette, drawtext, encode |
+| `python3Packages.pillow` | Renders and caches the bezel, scanline, and rolling-band assets |
+| `dejavu_fonts` (`DejaVuSansMono-Bold`) | Timestamp / timecode font, exported as `RETROCRT_FONT` |
+
+Assets are cached in `${XDG_CACHE_HOME:-~/.cache}/retrocrt/` and regenerated only when their parameters change.
+
+#### Quick start
+
+```bash
+crt clip.mp4                            # classic, parallel (default), -> clip-retro.mp4
+crt clip.mp4 -o out.mp4 --preset vhs    # heavy VHS look
+crt clip.mp4 --preset subtle            # barely-there retro
+crt clip.mp4 --jobs 1                   # single process, old behaviour
+crt clip.mp4 --preview 20               # first 20s only -> clip-preview.mp4
+crt clip.mp4 -o out.mp4 --fast          # VideoToolbox (macOS, lower quality)
+```
+
+Quote filenames that contain spaces, `:` or `｜`:
+
+```bash
+crt "Best Bits of Season 4： Volume 1 ｜ Rick and Morty ｜ adult swim.mp4"
+```
+
+#### Presets
+
+| Preset | Pixelation | Scanlines | Grain | Bloom | Chroma bleed | Glitch | Timestamp |
+|---|---|---|---|---|---|---|---|
+| `subtle` | mild | faint | light | soft | 1 px | rare | off |
+| `classic` | visible | strong | medium | medium | 2 px | moderate | date + clock + timecode |
+| `vhs` | heavy | strong | heavy | strong | 4 px | frequent + rolling band | date + clock + timecode + blinking `REC` |
+
+`--intensity N` scales every effect at once (`0` = almost clean, `1` = preset default, `2` = doubled). Individual effects can be turned off with `--no-scanlines`, `--no-bezel`, or `--no-timestamp`.
+
+#### Bezel
+
+The screen opening is a rounded rectangle by default (gentle corners, straight edges) drawn over slightly over-scanned video, giving a rectangular CRT housing rather than an oval tube. Set `--bezel-radius 0` to use a superellipse controlled by `--bezel-curve` instead.
+
+| Flag | Default | What it does |
+|---|---|---|
+| `--bezel-style plastic\|wood\|metal` | `plastic` | Body material and default colour |
+| `--bezel-thickness F` | `0.045` | Frame thickness as a fraction of output height (`0.02` thin, `0.10` chunky) |
+| `--bezel-radius F` | `0.05` | Corner radius as a fraction of the window. `0.03` subtle, `0.10` soft TV, `0` switches to the superellipse |
+| `--bezel-curve N` | `6.0` | Superellipse exponent when `--bezel-radius 0`: `2` = ellipse, `4` = rounded TV, `8+` = squarer |
+| `--bezel-color '#rrggbb'` | style-based | Override the plastic/wood/metal colour |
+| `--no-highlight` | off | Remove the inner rim highlight |
+| `--height PX` | source + bezel | Fixed output canvas height (e.g. `1080`); width follows the source aspect |
+| `--no-bezel` | off | Keep all effects but skip the frame and canvas padding |
+
+#### Timestamp and timecode
+
+`classic` and `vhs` draw three things in the bundled mono font:
+
+- **Date** — top-left, e.g. `JUN 01 1994` (`--stamp-date`).
+- **Wall clock** — top-left, ticks from `--stamp-start` (default `1994-06-01 23:58:00`).
+- **Video timecode** — bottom-right `HH:MM:SS`, always starts at `00:00:00` and follows the clip's own PTS.
+
+`vhs` adds a blinking red `● REC` next to the date and a 1 px RGB ghost. Use `--no-timestamp` to hide all of it, or `--stamp-date 'DEC 25 1987'` / `--stamp-start '1987-12-25 18:00:00'` for a different era.
+
+#### File size
+
+Grain, scanlines and wobble are high-frequency noise, so x264 has to spend far more bits on them than on the clean source. At the default CRF 22 a grainy 1080p clip is typically **2–3× the source size**, and CRF 18 can be 4×. The canvas is also ~15% larger than the source frame by default.
+
+Levers, in order of impact:
+
+| Option | Effect |
+|---|---|
+| `--maxrate 1400k` | Caps the video bitrate; usually lands near the source size (~10–20% bigger). Best single knob for size |
+| `--crf 24` / `--crf 26` | Lower quality, smaller file; grain hides most of it |
+| `--height 1080` | Removes the extra canvas pixels (~20–25% smaller) |
+| `--intensity 0.7` or `--preset subtle` | Less grain/scanlines → much better compression |
+
+Example roughly matching a 1.4 Mbit/s source:
+
+```bash
+crt episode.mp4 --maxrate 1400k
+```
+
+#### Audio
+
+Audio is transcoded to **AAC 192 kbit/s** by default so the result plays everywhere, including QuickTime and Apple Books. This matters for sources whose audio is Opus or Vorbis (common in MP4/WebM), which ffmpeg can mux but Apple players cannot decode. Use `--copy-audio` to keep the original stream untouched, or `--audio-age` to muffle it (`highpass` + `lowpass`) and add a short echo, which pairs well with `vhs`.
+
+#### Output, batch mode and progress
+
+- Single input without `-o` → `<name>-retro.mp4` next to the source (`<name>-preview.mp4` with `--preview`).
+- Single input with `-o file.mp4` → exact path.
+- Multiple inputs with `-o dir/` → `dir/<name>-retro.mp4` for each; without `-o` they land beside each source.
+- Encoding writes H.264 `yuv420p` with `+faststart` (CRF 22, AAC audio). `--crf` changes quality; `--maxrate 1400k` caps the bitrate if file size matters. `--fast` switches to macOS VideoToolbox.
+- The encode goes to a sibling `<name>.part.mp4` first and is renamed only after ffmpeg finalizes the container. If the run is interrupted (Ctrl+C, SIGTERM, closed terminal, crash), the partial file is deleted, so you never get a `moov atom not found` MP4 under the real name.
+- An existing output is never replaced unless you pass `--overwrite`.
+- Progress is shown when stderr is a terminal: a live bar per segment plus a total line, or one bar for `--jobs 1`. Hidden automatically when piped; `--no-progress` disables it.
+
+#### Parallel encoding (`--jobs`)
+
+`--jobs` (default `auto`) splits a single video into frame-aligned segments, encodes them concurrently, then concatenates the result and muxes one audio pass:
+
+| Value | Behaviour |
+|---|---|
+| `auto` (default) | `round(cores / 3)`, clamped to `2..6` — 4 jobs on a 12-thread Mac; 2 on an 8-thread one |
+| `N` | exactly N segments / concurrent files |
+| `1` | old single-process path (no splitting) |
+
+With several inputs, `--jobs` instead runs up to N files concurrently (each with its own ffmpeg process).
+
+Details:
+
+- Effects are time-aware across joins: each segment's PTS is offset before filtering and reset afterwards, so glitch/wobble/rolling-band timing, the wall clock, and the video timecode stay continuous.
+- Segments are cut by frame count, not approximate seconds, so joins are clean (±1 frame in practice, invisible under the CRT treatment).
+- Audio is encoded once for the whole clip and muxed at the end, avoiding AAC gaps at boundaries.
+- Work happens in `.retrocrt-<random>/` beside the output; it is removed on success, failure, or interrupt. Temp disk usage is about one extra copy of the output.
+- Each segment gets its own live progress bar (percent, elapsed/total, per-segment speed); a total line appears when the run completes.
+
+**Measured** on a 12-thread Apple Silicon Mac, 1080p `vhs`: ~65s single-process → ~34s with 4 jobs for a 60s clip (~1.9×). The single process already uses ~6 cores, so 4–6 jobs is the practical ceiling without reducing quality or using `--fast`. Each segment gets `cores / jobs` encoder and filter threads, so all bars advance together instead of one racing ahead. The environment variables `RETROCRT_SEG_THREADS` and `RETROCRT_SEG_FILTER_THREADS` override those values for tuning.
+
+The first few seconds show all bars at 0% while x264 warms up; after that they advance in lockstep.
+
+#### Preview mode (`--preview`)
+
+`--preview SECONDS` encodes only the first N seconds and writes `<name>-preview.mp4` (unless `-o` is given). Timestamps still start at zero, so a preview matches the final output exactly. Combine with `--jobs` as usual.
+
+```text
+  [#################-------------]  57.3%  11:32/20:08    1.42x
+```
+
+#### Recipes
+
+```bash
+# Clean-ish retro for an anime episode, 1080p
+crt episode.mkv -o episode-retro.mp4 --preset classic --height 1080
+
+# Fast look-dev: 20s preview in ~10s instead of rendering the whole episode
+crt episode.mkv --preview 20 --preset vhs
+
+# Tune the parallel split explicitly
+crt episode.mkv --jobs 4
+
+# Full VHS pastiche with reproducible glitches and degraded audio
+crt holiday.mp4 --preset vhs --audio-age --seed 1994
+
+# Old camcorder date, thin metal frame, no scanlines
+crt wedding.mp4 --stamp-date 'AUG 14 1993' --bezel-style metal \
+    --bezel-thickness 0.04 --no-scanlines
+
+# Batch a season folder, keeping each file beside its source
+crt Season\ 04/*.mkv --preset subtle --seed 7
+
+# Preview the filtergraph without encoding
+crt clip.mp4 --dump-filter
+```
+
+#### Performance
+
+The wobble/displacement, bloom, grain and lens stages run per pixel and dominate CPU time; a 1080p `vhs` encode needs roughly 6 s of CPU per second of video. `--jobs auto` already turns that into ~2× wall-clock speedup on a 12-thread machine. For long episodes:
+
+1. `--jobs 4` (or `auto`) is the measured sweet spot; more jobs oversubscribe and get slower.
+2. `--fast` (VideoToolbox) offloads x264 and is the next biggest win, at some quality cost.
+3. `--preset subtle --intensity 0.6` skips the heaviest grain/bloom.
+4. `--height 720` roughly halves the pixel work.
+5. Bezel and scanline PNGs are cached, so repeat runs start immediately.
+6. `--preview 20` checks a preset in seconds.
+
+#### Troubleshooting
+
+| Symptom | Fix |
+|---|---|
+| Looks too clean | Raise `--intensity` (e.g. `1.4`) or move to a stronger preset |
+| Glitches too frequent/rare | `--intensity` scales them; `--seed` only changes the pattern, not the rate |
+| Too slow on a long clip | `--jobs auto` is on by default; try `--fast`, `--height 720`, or lower `--intensity` |
+| Parallel run slower than expected | Try `--jobs 4`; 8+ jobs oversubscribe a 12-thread machine. Very short clips also pay process-startup overhead, so `--jobs 1` can win. |
+| Timestamp missing | `--preset subtle` has none; use `classic`/`vhs` or check `--font` |
+| Text clipped by the frame | Use the default bezel or reduce `--bezel-thickness`; very thick frames shrink the safe area |
+| Bezel looks too oval | Default is a rounded rectangle (`--bezel-radius 0.05`); use a smaller radius (e.g. `0.03`) or `--bezel-radius 0 --bezel-curve 8` for squarer corners |
+| Output is much larger than the source | Grain/scanlines dominate bitrate. Use `--maxrate 1400k`, `--crf 24`, `--height 1080`, or a lighter `--intensity` |
+| Output is bigger than needed | Pass `--height 1080` (or lower); the canvas otherwise matches source height |
+| QuickTime/Finder says the MP4 “could not be opened” | Update and re-run; older builds could leave a truncated file after an interrupt. The current version writes atomically and transcodes audio to AAC. Use `--overwrite` to replace the old broken file. |
+| `moov atom not found` when probing | The file was never finalized; delete it and re-run (the temp-file write prevents this now) |
+| Audio silent/unplayable in Apple apps | The source is likely Opus/Vorbis; the default AAC transcode fixes it (`--copy-audio` opts out) |
+| Warnings about colourspace conversion | Harmless; the encode log is now quiet by default (`-loglevel error`) |
+
 ## Skills
 
 OpenCode skills are stored in `skills/` and auto-deployed to `~/.config/opencode/skills/<name>/` by the [`opencode.nix`](#opencodenix) module — every file in a skill directory is symlinked recursively, so a lean router `SKILL.md` can route to on-demand companions (`GUIDE.md`, `references/*.md`, `templates/`, `scripts/`) without bloating the always-loaded context.
@@ -616,6 +810,17 @@ Builds [obsitui](https://github.com/atr0t0s/obsitui) — a terminal UI for brows
 | Source | `github:atr0t0s/obsitui` (main) |
 | Build | `buildNpmPackage` |
 | License | MIT |
+
+### retrocrt
+
+Bundles [`scripts/retrocrt.py`](scripts/retrocrt.py) with a Python environment containing Pillow, plus a pinned `ffmpeg` and the `DejaVu Sans Mono` timestamp font. The script itself is std-lib Python; ffmpeg performs the actual video processing.
+
+| Attribute | Value |
+|---|---|
+| Source | `scripts/retrocrt.py` |
+| Runtime | Python 3 with `pillow`, pinned `ffmpeg`, `dejavu_fonts` |
+| Cache | `${XDG_CACHE_HOME:-~/.cache}/retrocrt/` |
+| Output | H.264 (`yuv420p`, `+faststart`), audio copied or aged with `--audio-age` |
 
 ## Quick Start
 
@@ -964,6 +1169,7 @@ It produces one EPUB per directory that directly contains markdown (mirroring th
 | `ga` | `git add .` |
 | `yt` | Download a 4K video via `download-vid.sh` |
 | `build-epubs` | Build EPUB books from the ~/interview-prep markdown tree |
+| `crt` | Stylise a video with a CRT/VHS look (`retrocrt`) |
 | `ghostty-set-theme` | Pick a Ghostty theme via fzf (live preview); `--reset` for the default |
 | `generate-ssh-key` | Generate an Ed25519 SSH key for a given email |
 | `bash ~/dotfiles/scripts/install-nix.sh` | Install the official multi-user Nix on Linux and macOS (`--daemon`) |
