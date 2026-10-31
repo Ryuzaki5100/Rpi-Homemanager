@@ -24,6 +24,7 @@ Personal Home Manager configuration for a terminal-centric workflow, shared acro
   - [filebrowser.nix](#filebrowsernix)
   - [obsidian.nix](#obsidiannix)
   - [ghostty.nix](#ghosttynix)
+  - [opencode-lmstudio.nix](#opencode-lmstudionix)
   - [glow.nix](#glownix)
   - [epub.nix](#epubnix)
   - [retrocrt.nix](#retrocrtnix)
@@ -136,6 +137,7 @@ dotfiles/
 │   │   ├── mangal.nix         # Mangal downloader config
 │   │   ├── obsidian.nix       # Obsidian vaults & Basalt config
 │   │   ├── opencode.nix       # OpenCode config, MCP settings & skill deployment
+│   │   ├── rtk-opencode.ts    # Vendored RTK token-compression plugin (synced, do not edit)
 │   │   ├── pebble.nix         # Pebble SDK/tool/QEMU wiring and SDK activation
 │   │   ├── retrocrt.nix       # retrocrt CLI (CRT/VHS video styliser)
 │   │   └── packages.nix       # Cross-platform package set
@@ -149,6 +151,8 @@ dotfiles/
 │   └── darwin/             # aarch64-darwin
 │       ├── filebrowser.nix    # launchd user agent
 │       ├── ghostty.nix        # Ghostty terminal, Nerd Font & ghostty-set-theme picker
+│       ├── opencode-lmstudio.nix # `opl`: opencode against loadable LM Studio models
+│       ├── opl.py             # RAM-aware model/context selection + LM Studio lifecycle
 │       └── packages.nix       # macOS-only package set
 ├── glow/
 │   └── themes/            # glamour v2 theme JSONs (retro-orange, gruvbox, nord, tokyo-night, catppuccin-mocha, dracula, blood-red)
@@ -182,6 +186,7 @@ dotfiles/
 │   ├── setup-rpi-usb-gadget.sh # Configure RPi as USB ethernet gadget
 │   ├── setup-tailscale.sh     # Tailscale auth, status check, and systemd enable
 │   ├── setup-wayvnc.sh        # Set up WayVNC VNC server for iPad access
+│   ├── sync-rtk-plugin.sh     # Vendor the upstream RTK OpenCode plugin matching the locked rtk
 │   └── sync-to-ssd.sh         # Sync Immich albums to an external drive
 └── skills/
     ├── ai-era-mock-interview/ # OpenCode skill: AI-era mock interview on a buggy Java/Maven codebase
@@ -221,7 +226,7 @@ Modules are grouped into platform layers and selected at build time by [`modules
 | `common/` | always | Cross-platform packages and config (see the sections below) |
 | `linux/` | `pkgs.stdenv.hostPlatform.isLinux` | Linux packages, systemd services, `/mnt/hdd` mounts, Immich localtime mount |
 | `linux-aarch64/` | Linux **and** `isAarch64` | Pi 5 hardware: V4L2 decoder passthrough + Immich HW transcode |
-| `darwin/` | `pkgs.stdenv.hostPlatform.isDarwin` | macOS packages and the launchd Filebrowser agent |
+| `darwin/` | `pkgs.stdenv.hostPlatform.isDarwin` | macOS packages, the launchd Filebrowser agent, and the `opl` LM Studio launcher |
 
 ### core.nix
 
@@ -243,11 +248,12 @@ programs.home-manager.enable = true;
 
 ### env.nix
 
-Exports a single session variable:
+Exports session variables:
 
 | Variable | Value |
 |---|---|
 | `EDITOR` | `nixvim-editor` |
+| `RTK_DISABLED` | `1` — RTK token compression is opt-in only; use the `oprtk` fish function to enable it for one session |
 
 ### fish.nix
 
@@ -263,15 +269,14 @@ Configures Fish as the login shell.
 | Alias | Command |
 |---|---|
 | `nixvim` | `nix run github:Ryuzaki5100/nixvim --refresh` |
-| `rebuild-home-manager` | `home-manager switch --impure --flake ~/dotfiles#(whoami) && exec fish` |
-| `update-home-manager` | `cd ~/dotfiles && nix flake update && cd -` |
+| `rebuild-home-manager` | `~/dotfiles/scripts/sync-rtk-plugin.sh && home-manager switch --impure --flake ~/dotfiles#(whoami) && exec fish` |
+| `update-home-manager` | `cd ~/dotfiles && nix flake update && ./scripts/sync-rtk-plugin.sh && cd -` |
 | `search` | `nix search nixpkgs` |
 | `clock` | `clock-rs -c bright-black -B -b` |
 | `display` | `chafa -f kitty --fit-width` |
 | `edot` | `cd ~/dotfiles && nixvim` |
 | `dot` | `cd ~/dotfiles` |
 | `ga` | `git add .` |
-| `op` | `opencode` |
 | `yt` | `~/dotfiles/scripts/download-vid.sh` |
 | `build-epubs` | `~/dotfiles/scripts/build-epubs.sh` |
 | `crt` | `retrocrt` (CRT/VHS video styliser) |
@@ -283,9 +288,13 @@ Configures Fish as the login shell.
 
 | Function | Description |
 |---|---|
+| `op` | Shorthand for `opencode`. Passes all arguments through unchanged. |
+| `oprtk` | Shorthand for `opencode` with RTK token compression enabled for that session (sets `RTK_DISABLED=0`, overriding the global default of `1`). |
 | `generate-ssh-key` | Prompts for an email and generates an Ed25519 SSH key (`ssh-keygen -t ed25519 -C "<email>"`) |
 | `rebuild-nixos` | Rebuilds the NixOS system from `~/rpi-nixos` via `nixos-rebuild switch --flake`. Gracefully errors if not on NixOS or the flake directory is missing. |
 | `update-nixos` | Updates the flake lock for `~/rpi-nixos`. Harmless on non-NixOS hosts. |
+
+`op` and `oprtk` shadow a user completion file (`~/.config/fish/completions/op.fish` / `oprtk.fish`) over Fish's embedded `op` completion, which would otherwise invoke the real `op` binary during tab completion.
 
 ### opencode.nix
 
@@ -305,6 +314,12 @@ Configures [OpenCode](https://opencode.ai) — an AI coding assistant — via `p
 - Because a Flake only sees files tracked by Git, **new skill files must be `git add`ed before `home-manager switch`** (untracked files are invisible to the build)
 - This makes locally-developed skills available to OpenCode without manual copying
 
+**RTK token compression:**
+- Deploys the vendored upstream plugin (`rtk.ts`) into `~/.config/opencode/plugins/`, where OpenCode auto-loads it
+- The plugin rewrites shell commands through `rtk hook opencode` to cut token usage; all rewrite and permission logic lives upstream in rtk
+- Disabled by default via `RTK_DISABLED=1` (see [`env.nix`](#envnix)); run `oprtk` instead of `op` to enable it for a single session
+- [`scripts/sync-rtk-plugin.sh`](scripts/sync-rtk-plugin.sh) re-vendors `modules/common/rtk-opencode.ts` from the upstream tag matching the `rtk` version in the locked nixpkgs, and is run automatically by `update-home-manager` and `rebuild-home-manager`. It refuses rtk versions below `0.52.0` (the first with OpenCode 2 plugin support)
+
 ### packages.nix
 
 Declarative cross-platform package list installed via `home.packages` from [`modules/common/packages.nix`](modules/common/packages.nix). Grouped by category (Linux-only extras noted in parentheses):
@@ -312,7 +327,7 @@ Declarative cross-platform package list installed via `home.packages` from [`mod
 | Category | Packages |
 |---|---|
 | Editors | `neovim`, `opencode` (`code-server` on Linux) |
-| Dev tools | `lazygit`, `tmux`, `zellij`, `fzf`, `jdk`, `maven`, `devenv`, `cmake`, `ninja`, `autoconf`, `automake`, `libtool`, `pkg-config` |
+| Dev tools | `rtk`, `lazygit`, `tmux`, `zellij`, `fzf`, `jdk`, `maven`, `devenv`, `cmake`, `ninja`, `autoconf`, `automake`, `libtool`, `pkg-config` |
 | Containers | `docker`, `docker-compose`, `jq` |
 | System info | `fastfetch`, `btop`, `clock-rs`, `dripfetch`, `smartmontools` (`nitch` on Linux) |
 | Media & graphics | `chafa`, `timg`, `mpv`, `ffmpeg`, `yt-dlp`, `yazi`, `pandoc`, `dysk`, `nix-search-tv` (`foliate` on Linux) |
@@ -453,6 +468,7 @@ Declarative configuration for the [Ghostty](https://ghostty.org) terminal (macOS
 - **Package** — `pkgs.ghostty-bin` (the prebuilt 1.3.1 `.app` from nixpkgs) is installed, so no Homebrew cask is needed. Home Manager copies the bundle into `~/Applications/Home Manager Apps/Ghostty.app` and puts the `ghostty` CLI wrapper on `PATH`. Fish shell integration is enabled (Ghostty exports `$GHOSTTY_RESOURCES_DIR` to spawned shells).
 - **Font** — `nerd-fonts.jetbrains-mono` is installed (linked into `~/Library/Fonts/HomeManager/truetype/NerdFonts/JetBrainsMono`) and set as `font-family = "JetBrainsMono Nerd Font"` at `font-size = 20` with `font-thicken = true` for glyph/icon coverage.
 - **Pretty defaults** — transparency + blur (`background-opacity = 0.7`, `background-opacity-cells = true`, `background-blur = true`), Display P3 colors, window padding, block cursor, `copy-on-select = clipboard`, `mouse-hide-while-typing`, and `macos-option-as-alt`. `background-opacity-cells` extends the window opacity to app-painted cells, so TUIs that repaint the background (opencode, Neovim, tmux) are see-through for every theme instead of rendering opaque.
+- **Split navigation** — `alt+shift+h/j/k/l` move between splits in Vim directions; split creation stays on the Ghostty defaults (`cmd+d`, `cmd+shift+d`).
 - **Default theme** — `Catppuccin Mocha`.
 - **Runtime theme override** — the config includes `config-file = ?~/.local/state/ghostty/theme.ghostty`. Because Ghostty loads includes *after* the main file, the picker can change the active theme without editing the managed config, and the override survives `home-manager switch`.
 - **`ghostty-set-theme`** — a fish function that runs an `fzf` picker over `ghostty +list-themes --plain` (all 460+ built-ins plus any user themes in `~/.config/ghostty/themes`), with a live truecolor swatch preview rendered by the private `_ghostty-theme-preview` helper. Pass a name to set it directly, or `--reset` to fall back to the default.
@@ -462,6 +478,27 @@ ghostty-set-theme                     # fzf picker with live color preview
 ghostty-set-theme "TokyoNight Night"  # set directly
 ghostty-set-theme --reset             # back to Catppuccin Mocha
 ```
+
+### opencode-lmstudio.nix
+
+macOS-only launcher (`opl`) that opens [opencode](#opencodenix) against [LM Studio](https://lmstudio.ai)'s headless local server, exposing **only** models that are present on disk and can actually run on this machine.
+
+- **Deployment** — lives in the `darwin/` layer, so the `opl` command, the pinned Python interpreter, and [`opl.py`](modules/darwin/opl.py) never exist on Linux hosts. Deployed with `pkgs.writers.writePython3Bin` (stdlib only) and added to `home.packages`.
+- **Server** — starts `lms server start` on demand (headless, default port `1234`) and reuses an already-running server.
+- **Inventory** — reads `lms ls --json --llm`, keeping LLMs with non-zero size. A model is dropped when `lms load <key> --estimate-only` exits non-zero (missing/incomplete files).
+- **Context sizing** — picks the largest power-of-two context (`8192` … model max) that fits the RAM budget: `0.85 × physical RAM − 2 GiB − already-loaded models`. GGUF models use LM Studio's own estimate at each candidate; MLX/flat estimates derive KV-cache bytes from the model's `config.json` (`text_config`).
+- **opencode config** — injected through `OPENCODE_CONFIG_CONTENT` (no edits to the managed `opencode.json`): `enabled_providers = ["lmstudio"]`, `model`/`small_model` set to the first loadable model, and a `lmstudio` provider with a whitelist of the selected models and their per-model context limits.
+- **Lifecycle** — opencode JIT-loads a model on the first request. The launcher snapshots loaded instances before launch and, when opencode exits (including `SIGINT`/`SIGTERM`/`SIGHUP`), unloads only the instances it created — models already loaded by Bionic are left alone.
+
+```bash
+opl                    # start server (if needed) and open opencode
+opl -m lmstudio/qwen/qwen3.8-27b
+opl --print-config     # show the generated config + chosen contexts
+opl --verbose          # explain model/context selection
+opl --no-server        # do not auto-start LM Studio
+```
+
+Tunables: `--ram-fraction` (default `0.85`), `--reserve-gib` (default `2`), `--max-context` (default `262144`).
 
 ### glow.nix
 

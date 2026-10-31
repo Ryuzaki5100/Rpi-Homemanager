@@ -6,6 +6,7 @@
     ./packages.nix
     ./filebrowser.nix
     ./ghostty.nix
+    ./opencode-lmstudio.nix
   ];
 
   # The App Management pre-check touches every managed .app bundle, which

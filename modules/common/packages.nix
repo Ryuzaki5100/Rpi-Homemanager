@@ -16,6 +16,7 @@
     opencode
 
     # Dev tools
+    rtk
     lazygit
     tmux
     zellij

@@ -47,5 +47,9 @@ in {
     };
   };
 
-  xdg.configFile = skillFiles;
+  # Vendored RTK OpenCode plugin (auto-loaded from the global plugin dir).
+  # It no-ops while RTK_DISABLED=1 (set globally); `oprtk` overrides it.
+  xdg.configFile = skillFiles // {
+    "opencode/plugins/rtk.ts".source = ./rtk-opencode.ts;
+  };
 }

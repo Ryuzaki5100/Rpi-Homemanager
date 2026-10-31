@@ -61,6 +61,15 @@ in
       confirm-close-surface = false;
       shell-integration = "detect";
       macos-option-as-alt = true;
+
+      # Vim-style split navigation (option+shift = alt+shift). Split creation
+      # stays on the defaults: cmd+d (right) and cmd+shift+d (down).
+      keybind = [
+        "alt+shift+h=goto_split:left"
+        "alt+shift+j=goto_split:down"
+        "alt+shift+k=goto_split:up"
+        "alt+shift+l=goto_split:right"
+      ];
     };
   };
 
