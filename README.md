@@ -72,6 +72,8 @@ flake.nix  ──►  home.nix  ──►  modules/default.nix
                             ├── daily-prep-questions/SKILL.md
                             ├── glow-theme-creator/SKILL.md
                             ├── hld-problems-generator/SKILL.md
+                            ├── job-grabber/SKILL.md
+                            ├── job-search-resume-tailor/SKILL.md
                             ├── manga-merger/SKILL.md
                             ├── single-resume-tailor/SKILL.md
                             ├── skill-creator/SKILL.md
@@ -84,7 +86,7 @@ flake.nix  ──►  home.nix  ──►  modules/default.nix
 
 | Layer | Description |
 |---|---|
-| **`flake.nix`** | Entry point. Pins `nixpkgs` (nixos-unstable), `home-manager`, and the upstream `dripfetch` packaging flake. Builds custom packages per system (`packages.<system>` for `x86_64-linux`, `aarch64-linux`, `aarch64-darwin`) and passes them as `extraSpecialArgs` into the module tree. The `homeConfigurations.<user>` output targets the current host. |
+| **`flake.nix`** | Entry point. Pins `nixpkgs` (nixos-unstable), `home-manager`, and the upstream `dripfetch` packaging flake. Builds custom packages per system (`packages.<system>` for `x86_64-linux`, `aarch64-linux`, `aarch64-darwin`) and passes them as `extraSpecialArgs` into the module tree. `homeConfigurations.<user>` targets the current host and needs `--impure`; `homeConfigurations.<user>-<system>` gives an explicit, pure-safe target per platform. |
 | **`home.nix`** | Thin shim; imports `modules/` and sets shared `nixpkgs.config`. |
 | **`modules/default.nix`** | The single platform-selection point. Imports `common/` always, plus the matching platform layer(s) based on `pkgs.stdenv.hostPlatform`. |
 | **`modules/common/`** | Modules and packages that build on **every** platform. |
@@ -195,6 +197,8 @@ dotfiles/
     ├── daily-prep-questions/ # OpenCode skill: daily no-repeat interview-prep set (LC/SD/behavioral/SQL/LLD)
     ├── glow-theme-creator/ # OpenCode skill: build glow themes from a described vibe
     ├── hld-problems-generator/ # OpenCode skill: synthesize HLD practice problems + EPUB
+    ├── job-grabber/       # OpenCode skill: verified weekly job-intel run + resume dispatch
+    ├── job-search-resume-tailor/ # OpenCode skill: audited, evidence-backed JD→resume tailoring
     ├── manga-merger/      # OpenCode skill: merge manga image folders into a fixed-layout EPUB
     ├── pebble-app/        # OpenCode skill: orchestrate a Pebble watchface/watchapp build
     ├── pebble-core/       # OpenCode skill: shared Pebble platform/docs/sample references
@@ -334,9 +338,10 @@ Declarative cross-platform package list installed via `home.packages` from [`mod
 | Networking & chat | `browsh`, `nchat`, `bitchat-cli`, `tailscale`, `reddit-tui`, `reddix`, `discordo`, `wiki-tui`, `hackernews-tui`, `youtube-tui`, `smassh`, `mangal` (`bluetuith`, `wifitui` on Linux) |
 | Obsidian TUIs | `basalt`, `obsitui`, `glow`, `nixvim-editor` |
 | Diagram generation | `archify` (also exports `ARCHIFY_ROOT` for the `content-to-diagram` skill) |
+| Documents | TeX Live (`scheme-basic` combined with `enumitem`, `titlesec`, `geometry`, `hyperref`, `ec`, `cm-super`) for resume builds, plus `poppler-utils` (`pdfinfo`, `pdftotext`) for PDF validation |
 | Fun | `cmatrix`, `posting`, `asciiquarium` |
 
-Platform-specific packages live in [`modules/linux/packages.nix`](modules/linux/packages.nix) (`code-server`, `nitch`, `bluetuith`, `wifitui`, `exfatprogs`, `foliate`, plus `vial` on `x86_64-linux`) and [`modules/darwin/packages.nix`](modules/darwin/packages.nix). macOS uses `fastfetch` in place of `nitch`, and native Bluetooth/Wi-Fi/exFAT in place of the Linux TUIs. `vial` is gated to `x86_64-linux` because nixpkgs does not build it for `aarch64-linux`. macOS additionally installs Qt 6 base/charts, FFmpeg development outputs, `glslang`, `spirv-tools`, and `zstd` (plus its dev output) for building Eden.
+Platform-specific packages live in [`modules/linux/packages.nix`](modules/linux/packages.nix) (`code-server`, `nitch`, `bluetuith`, `wifitui`, `exfatprogs`, `foliate`, plus `vial` on `x86_64-linux`) and [`modules/darwin/packages.nix`](modules/darwin/packages.nix). macOS uses `fastfetch` in place of `nitch`, and native Bluetooth/Wi-Fi/exFAT in place of the Linux TUIs. `vial` is gated to `x86_64-linux` because nixpkgs does not build it for `aarch64-linux`. macOS additionally installs Qt 6 base/charts, FFmpeg development outputs, `glslang`, `spirv-tools`, and `zstd` (plus its dev output) for building Eden, and the .NET 10 SDK (with `DOTNET_ROOT`) for switch2mac's shader translator.
 
 > **Note:** `localsend` is commented out because its Flutter dependency (`aapt`) doesn't support `aarch64-linux`. It will be re-enabled once upstream support lands.
 
@@ -789,6 +794,20 @@ Given a list of job posting URLs (Naukri, LinkedIn, company career pages, etc.),
 
 Given a single job description, curates a polished, ATS-optimized LaTeX resume from `~/my_resumes/knowledge_base.md` that fills exactly one page: keyword-mirrored bullets, a Professional Summary, a dedicated Skills block, document-wide unique action verbs, and an ATS-safe single-column layout. Saves it to `~/my_resumes/<company>/<company>_<role>.tex`.
 
+### job-search-resume-tailor
+
+The audited counterpart to `single-resume-tailor`. Given one job description, it classifies and prioritises the requirements, builds a candidate-to-JD **evidence matrix** with a fit verdict, and rewrites only what the evidence in `~/job-search/my_resumes/knowledge_base.md` can defend — internship vs full-time tenure, project vs production claims, and accurate technology coverage are preserved throughout. It then generates a single-column, ATS-safe LaTeX resume, compiles it, and validates page count, page size, and text extraction before writing `<company>/<company>_<role>.tex` plus the mirrored `pdfs/<company>/<company>_<role>.pdf`.
+
+Companion references hold the per-domain keyword strategy, the evidence-and-validation rules, and the hard boundary against claiming production RAG, vector databases, or model training. `job-grabber` dispatches this skill for any verified role scoring 80+.
+
+### job-grabber
+
+A weekly job-search run that treats *verification* as the unit of value rather than pages scraped. The router `SKILL.md` carries the non-negotiable rules (never fabricate, discovery is not verification, never research the same posting twice, respect access controls, never claim a channel you did not use, report discovery and direct-access coverage separately); `GUIDE.md` holds the candidate profile, targeting tiers, experience gates, scoring rubric, and publication checklist.
+
+Discovery runs cheapest-first: public ATS board APIs (Greenhouse, Lever, Ashby, SmartRecruiters) and official career portals, then search-engine indexing, then alert emails from `job-intel/inbox/`, then direct portal browsing, then secondary sources. Every shortlisted role is re-opened at the employer's own requisition before it enters the report. `references/portals.md` records the tested access method per portal — notably that LinkedIn's guest surface works over a plain HTTP fetch and Naukri's pages render through Firecrawl, both without logging in — and that a tool refusing a domain is not a portal being inaccessible.
+
+State lives in `~/job-search/my_resumes/job-intel/` and is the memory: `ledger.json` (every posting ever seen, deduplicated on requisition ID then normalised URL, with a 14-day re-verification TTL), `sources.json` (per-run source coverage and rolling channel performance), `skills-gap.json` (recurring unmet requirements), plus `runs/<date>-weekly-report.md`, `fits/<company>_<role>/{jd.md,fit.md}`, and the alert inbox. `scripts/ledger.py` does the lookup/upsert/close/coverage/skills-gap bookkeeping; `scripts/compile_resume.sh` compiles a tailored `.tex` and enforces the mirrored `pdfs/` output, one-page A4 check, and intermediate cleanup.
+
 ## Custom Packages
 
 ### nixvim-editor
@@ -892,6 +911,21 @@ bash ~/dotfiles/scripts/init-home-manager.sh
 > **Why `--impure`?** The flake reads the host platform and username
 > (`builtins.currentSystem` / `builtins.getEnv`) so the same command targets Linux
 > or macOS correctly. Under pure evaluation it falls back to `aarch64-linux`.
+
+**Pure-mode alternative.** Each supported platform is also exposed as an explicit attribute, which needs no impure evaluation:
+
+```bash
+home-manager switch --flake ~/dotfiles#$(whoami)-aarch64-darwin
+home-manager switch --flake ~/dotfiles#$(whoami)-aarch64-linux
+```
+
+> **If you see `platform mismatch`:** a bare `home-manager switch --flake .` evaluates
+> purely, so `builtins.currentSystem` is unavailable and the `<user>` alias falls back to
+> `aarch64-linux`. On a Darwin host that surfaces as `error: Cannot build … Reason:
+> platform mismatch / Required system: 'aarch64-linux' / Current system:
+> 'aarch64-darwin'`. The flake now warns with this explanation whenever the fallback is
+> taken — switch to `--impure` or to an explicit `#<user>-<system>` attribute rather than
+> retrying the bare command.
 
 ### Updating dependencies
 
