@@ -101,6 +101,49 @@
       defaultSystem = "aarch64-linux";
       system = if builtins ? currentSystem then builtins.currentSystem else defaultSystem;
       pkgs = mkPkgs system;
+
+      # One Home Manager configuration per platform, so pure evaluation (no
+      # `--impure`) can target a specific host unambiguously:
+      #   home-manager switch --flake ~/dotfiles#${userName}-aarch64-darwin
+      mkHome =
+        targetSystem: user:
+        let
+          pkgs' = mkPkgs targetSystem;
+        in
+        home-manager.lib.homeManagerConfiguration {
+          pkgs = pkgs';
+          modules = [
+            ./home.nix
+          ];
+          extraSpecialArgs = {
+            # Pass pkgs as a special arg so the platform aggregator
+            # (modules/default.nix) can branch on pkgs.stdenv.hostPlatform during
+            # `imports` evaluation (module args from _module.args would recurse).
+            pkgs = pkgs';
+            inherit (pkgs') obsitui nixvim-editor;
+            inherit pebble;
+          };
+        };
+
+      # A bare `home-manager switch --flake .` evaluates purely, where
+      # `builtins.currentSystem` does not exist. Without a warning that case
+      # silently targets `defaultSystem` (aarch64-linux) and then fails with an
+      # opaque "platform mismatch" on a Darwin host. Warn instead of failing
+      # blind, and point at the explicit per-system attributes below.
+      warnIfPure =
+        value:
+        if builtins ? currentSystem then
+          value
+        else
+          nixpkgs.lib.warn ''
+            Pure evaluation: builtins.currentSystem is unavailable, so this
+            attribute falls back to ${defaultSystem}. On a Darwin host that
+            fails with "platform mismatch". Use
+            `home-manager switch --impure --flake .#${userName}` or select an
+            explicit platform attribute: ${nixpkgs.lib.concatMapStringsSep ", " (
+              s: "#${userName}-${s}"
+            ) systems}.
+          '' value;
     in
     {
       packages = nixpkgs.lib.genAttrs systems (
@@ -125,19 +168,14 @@
         }
       );
 
-      homeConfigurations.${userName} = home-manager.lib.homeManagerConfiguration {
-        inherit pkgs;
-        modules = [
-          ./home.nix
-        ];
-        extraSpecialArgs = {
-          # Pass pkgs as a special arg so the platform aggregator
-          # (modules/default.nix) can branch on pkgs.stdenv.hostPlatform during
-          # `imports` evaluation (module args from _module.args would recurse).
-          inherit pkgs;
-          inherit (pkgs) obsitui nixvim-editor;
-          inherit pebble;
-        };
-      };
+      homeConfigurations =
+        # Host-resolved alias; requires `--impure` so currentSystem is available.
+        {
+          ${userName} = warnIfPure (mkHome system userName);
+        }
+        # Pure-safe, explicit targets: <user>-<system> for every supported platform.
+        // nixpkgs.lib.genAttrs (map (s: "${userName}-${s}") systems) (
+          attr: mkHome (nixpkgs.lib.removePrefix "${userName}-" attr) userName
+        );
     };
 }
