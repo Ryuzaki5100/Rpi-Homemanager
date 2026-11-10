@@ -55,6 +55,20 @@
     nix-search-tv
     # localsend
 
+    # Documents: LaTeX resume builds. Targeted combine rather than a full
+    # scheme — this is the exact set the resume templates need.
+    (pkgs.texlive.combine {
+      inherit (pkgs.texlive)
+        scheme-basic   # article class, latex.ltx, tools
+        enumitem       # itemize options
+        titlesec       # \titleformat, \titlespacing
+        geometry       # A4, 0.4in margins
+        hyperref       # clickable links
+        ec             # T1 font metrics
+        cm-super;      # Type-1 EC fonts
+    })
+    poppler-utils      # pdfinfo, pdftotext
+
     # Networking & chat
     browsh
     nchat
