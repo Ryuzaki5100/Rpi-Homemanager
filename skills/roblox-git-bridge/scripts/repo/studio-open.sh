@@ -6,10 +6,19 @@
 #
 # Local is the default because MCP `save_place` only writes to disk for local
 # places; a cloud place saves a cloud version, which git never sees.
+#
+# Launching notes (learned the hard way, keep them):
+#   - `open -a RobloxStudio <file>` does NOT load the place when invoked this
+#     way; Studio comes up with "Place is not open".
+#   - Running the binary with --task EditFile/EditPlace DOES load it.
+#   - Launch exactly one Studio per place, and detach with nohup so the instance
+#     survives the shell that started it.
 set -eu
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$ROOT"
+
+studio="/Applications/RobloxStudio.app/Contents/MacOS/RobloxStudio"
 
 mode=local
 case "${1:-}" in
@@ -25,24 +34,21 @@ case "${1:-}" in
 		;;
 esac
 
+[ -x "$studio" ] || {
+	echo "studio-open: Roblox Studio not found at $studio" >&2
+	exit 1
+}
+
 place_file=${ROBLOX_PLACE_FILE:-$(jq -r .placeFile roblox.json)}
 place_id=${ROBLOX_PLACE_ID:-$(jq -r '.game.placeId // empty' roblox.json)}
 universe_id=${ROBLOX_UNIVERSE_ID:-$(jq -r '.game.universeId // empty' roblox.json)}
 
-if [ "$(uname -s)" != Darwin ]; then
-	echo "studio-open: only macOS is wired up so far" >&2
-	exit 1
-fi
-
 if [ "$mode" = cloud ]; then
 	[ -n "$place_id" ] || { echo "studio-open: no game.placeId in roblox.json" >&2; exit 1; }
 	[ -n "$universe_id" ] || { echo "studio-open: no game.universeId in roblox.json" >&2; exit 1; }
-	# Launching the binary with a task opens a session for that place. Do not
-	# also open the file: two launches leave one instance at "Place is not open".
-	"/Applications/RobloxStudio.app/Contents/MacOS/RobloxStudio" \
-		--task EditPlace --placeId "$place_id" --universeId "$universe_id" \
+	nohup "$studio" --task EditPlace --placeId "$place_id" --universeId "$universe_id" \
 		>/dev/null 2>&1 &
-	echo "studio-open: launched cloud place $place_id (close other Studio windows first)"
+	echo "studio-open: launched cloud place $place_id"
 	exit 0
 fi
 
@@ -50,7 +56,5 @@ fi
 	echo "studio-open: $place_file is missing; run 'rojo build default.project.json -o $place_file'" >&2
 	exit 1
 }
-# Proven path: hand the file to LaunchServices as an argument. The
-# `--args --task EditFile` form silently fails to load the place when Studio is
-# already running.
-exec open -a RobloxStudio "$ROOT/$place_file"
+nohup "$studio" --task EditFile --localPlaceFile "$ROOT/$place_file" >/dev/null 2>&1 &
+echo "studio-open: launched $place_file"

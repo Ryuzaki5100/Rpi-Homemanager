@@ -37,17 +37,19 @@ Only one process can own the port; the second dies with "address already in use"
 - Evidence: `lsof -nP -iTCP:34872 -sTCP:LISTEN` shows an existing PID.
 - Fix: use one. `devenv up` is the managed path; stop with `devenv down`.
 
-## 4. Launching Studio twice for one place
+## 4. `open -a RobloxStudio <file>` does not load the place
 
-`open -a RobloxStudio file.rbxlx` forwards the file through the protocol handler;
-running the binary with `--task EditFile --localPlaceFile` does the same. Doing
-both gives one instance that owns the file and another stuck at "Place is not
-open".
+It spawns a `-protocolHandlerLaunch` process that MCP reports as
+`mode: "Unavailable"`, `name: null`, `state: "Place is not open"` — even when no
+other Studio is running.
 
-- Evidence: `list_roblox_studios` returns an extra entry with
-  `mode: "Unavailable"`, `name: null`, `state: "Place is not open"`.
-- Fix: launch once. Treat `Unavailable` entries as stray windows and ignore them;
-  never target them.
+- Evidence: `pgrep -fl MacOS/RobloxStudio` shows
+  `-protocolString file://… -protocolHandlerLaunch`, and the MCP entry has no
+  `file` field, while a correctly launched instance has `file: "<name>.rbxlx"`.
+- Fix: launch the binary directly with
+  `--task EditFile --localPlaceFile <path>` or
+  `--task EditPlace --placeId … --universeId …`, detached (`nohup … &`) so it
+  survives the shell. Launch once per place; ignore `Unavailable` entries.
 
 ## 5. Rojo silently overwrites Studio-side script edits
 
