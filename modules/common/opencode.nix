@@ -31,17 +31,21 @@ let
 in {
   programs.opencode = {
     enable = true;
+
+    # Validate the generated opencode.json against the schema shipped in the
+    # opencode package. A drifted MCP shape (e.g. the deprecated flat
+    # `mcp.<name>` form) then fails the build instead of silently disconnecting
+    # a server at runtime.
+    validateFiles.config = true;
+
     settings = {
       model = "opencode/deepseek-v4-flash-free";
-      mcp = {
-        gmail = {
-          type = "local";
-          enabled = true;
-          command = [ "uv" "run" "--no-project" "--with" "mcp-google-gmail" "--with" "mcp>=1.8.0,<2" "mcp-google-gmail" ];
-          environment = {
-            GMAIL_CREDENTIALS_PATH = "${config.home.homeDirectory}/.config/gmail-mcp/credentials.json";
-            GMAIL_TOKEN_PATH = "${config.home.homeDirectory}/.config/gmail-mcp/token.json";
-          };
+      mcp.servers.gmail = {
+        type = "local";
+        command = [ "uv" "run" "--no-project" "--with" "mcp-google-gmail" "--with" "mcp>=1.8.0,<2" "mcp-google-gmail" ];
+        environment = {
+          GMAIL_CREDENTIALS_PATH = "${config.home.homeDirectory}/.config/gmail-mcp/credentials.json";
+          GMAIL_TOKEN_PATH = "${config.home.homeDirectory}/.config/gmail-mcp/token.json";
         };
       };
     };
