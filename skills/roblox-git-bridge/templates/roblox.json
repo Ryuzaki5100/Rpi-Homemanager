@@ -1,0 +1,10 @@
+{
+  "repo": "<repo-name>",
+  "placeFile": "place/<game-slug>.rbxlx",
+  "game": {
+    "name": "<Game Display Name>",
+    "placeId": null,
+    "universeId": null
+  },
+  "sentinel": "ServerScriptService.<Name>Boot"
+}

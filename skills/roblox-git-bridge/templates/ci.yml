@@ -1,0 +1,55 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  lint-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rojo
+        run: |
+          curl -fsSL -o /tmp/rojo.zip \
+            https://github.com/rojo-rbx/rojo/releases/download/v7.7.1/rojo-7.7.1-linux-x86_64.zip
+          unzip -o /tmp/rojo.zip -d /tmp/rojo
+          sudo install /tmp/rojo/rojo /usr/local/bin/rojo
+
+      - name: Install Selene
+        run: |
+          curl -fsSL -o /tmp/selene.zip \
+            https://github.com/Kampfkarren/selene/releases/download/0.32.0/selene-0.32.0-linux.zip
+          unzip -o /tmp/selene.zip -d /tmp/selene
+          sudo install /tmp/selene/selene /usr/local/bin/selene
+
+      - name: Install StyLua
+        run: |
+          curl -fsSL -o /tmp/stylua.zip \
+            https://github.com/JohnnyMorganz/StyLua/releases/download/v2.6.0/stylua-linux-x86_64.zip
+          unzip -o /tmp/stylua.zip -d /tmp/stylua
+          sudo install /tmp/stylua/stylua /usr/local/bin/stylua
+
+      - name: Lint
+        run: selene src
+
+      - name: Format check
+        run: stylua --check src
+
+      - name: Build place
+        run: |
+          mkdir -p build
+          rojo build default.project.json -o build/game.rbxlx
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: game.rbxlx
+          path: build/game.rbxlx
+
+# Publishing is intentionally a separate, tag-gated job:
+#   rojo upload --api_key "$ROBLOX_API_KEY" \
+#     --universe_id <universeId> --asset_id <placeId> default.project.json
+# It cannot run playtests; Studio needs a signed-in session for that.

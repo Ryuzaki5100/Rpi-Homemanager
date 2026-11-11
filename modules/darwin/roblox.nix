@@ -19,6 +19,20 @@ let
     [ -f globalTypes.d.luau ] && args+=("--definitions=globalTypes.d.luau")
     exec ${pkgs.luau-lsp}/bin/luau-lsp lsp "''${args[@]}"
   '';
+
+  # Stable command name for the Studio MCP server, so project-level OpenCode
+  # configs can reference `roblox-studio-mcp` instead of hardcoding an absolute
+  # .app path. Repos also provide this name through their own devenv.
+  studioMcp = pkgs.writeShellScriptBin "roblox-studio-mcp" ''
+    if [ -x "${studioMacOS}/StudioMCP" ]; then
+      exec "${studioMacOS}/StudioMCP"
+    fi
+    if [ -n "''${LOCALAPPDATA:-}" ] && [ -f "$LOCALAPPDATA/Roblox/mcp.bat" ]; then
+      exec cmd.exe /c "$LOCALAPPDATA/Roblox/mcp.bat"
+    fi
+    echo "roblox-studio-mcp: Roblox Studio MCP server not found; is Roblox Studio installed?" >&2
+    exit 1
+  '';
 in {
   home.packages = with pkgs; [
     rojo # filesystem <-> Studio project mapping, serve/build/upload
@@ -28,6 +42,7 @@ in {
     luau # interpreter for one-off checks
     lune # Luau scripting / test runner
     luauLsp
+    studioMcp
 
     # wally is intentionally absent: nixpkgs marks it badPlatforms on
     # aarch64-darwin. If a project needs Luau packages, pin wally's prebuilt
@@ -39,7 +54,7 @@ in {
     # Assistant -> ... -> Manage MCP Servers -> "Enable Studio as MCP server".
     mcp.servers.roblox = {
       type = "local";
-      command = [ "${studioMacOS}/StudioMCP" ];
+      command = [ "roblox-studio-mcp" ];
       codemode = true;
       # Studio enumerates ~25 tools on startup, and mesh/playtest jobs run for
       # minutes. The 5s default is too tight on both ends.
