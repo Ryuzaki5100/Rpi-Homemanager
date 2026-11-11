@@ -25,6 +25,7 @@ Personal Home Manager configuration for a terminal-centric workflow, shared acro
   - [obsidian.nix](#obsidiannix)
   - [ghostty.nix](#ghosttynix)
   - [opencode-lmstudio.nix](#opencode-lmstudionix)
+  - [roblox.nix](#robloxnix)
   - [glow.nix](#glownix)
   - [epub.nix](#epubnix)
   - [retrocrt.nix](#retrocrtnix)
@@ -39,6 +40,7 @@ Personal Home Manager configuration for a terminal-centric workflow, shared acro
   - [retrocrt](#retrocrt)
 - [Quick Start](#quick-start)
   - [macOS Support](#macos-support)
+  - [Roblox Studio Setup](#roblox-studio-setup)
   - [Gmail MCP Setup](#gmail-mcp-setup)
   - [Firecrawl Setup](#firecrawl-setup)
   - [Tailscale Setup](#tailscale-setup)
@@ -155,6 +157,7 @@ dotfiles/
 │       ├── ghostty.nix        # Ghostty terminal, Nerd Font & ghostty-set-theme picker
 │       ├── opencode-lmstudio.nix # `opl`: opencode against loadable LM Studio models
 │       ├── opl.py             # RAM-aware model/context selection + LM Studio lifecycle
+│       ├── roblox.nix         # Roblox/Luau toolchain, Studio MCP wiring, luau-lsp wrapper
 │       └── packages.nix       # macOS-only package set
 ├── glow/
 │   └── themes/            # glamour v2 theme JSONs (retro-orange, gruvbox, nord, tokyo-night, catppuccin-mocha, dracula, blood-red)
@@ -211,6 +214,7 @@ dotfiles/
     ├── pebble-build-test/ # OpenCode skill: build, emulator, screenshot QA
     ├── pebble-release/    # OpenCode skill: icons, GIF, store publishing
     ├── single-resume-tailor/ # OpenCode skill: ATS-optimized one-page resume from a JD
+    ├── roblox-git-bridge/ # OpenCode skill: attach a Roblox game to a git repo and keep it in sync
     ├── skill-creator/     # OpenCode skill: interactive skill creation wizard (router pattern)
     ├── system-design-tester/ # OpenCode skill: generate timestamped SD test papers
     ├── system-design-tutor/ # OpenCode skill: answer keys, grading, and reasoning for SD tests
@@ -230,7 +234,7 @@ Modules are grouped into platform layers and selected at build time by [`modules
 | `common/` | always | Cross-platform packages and config (see the sections below) |
 | `linux/` | `pkgs.stdenv.hostPlatform.isLinux` | Linux packages, systemd services, `/mnt/hdd` mounts, Immich localtime mount |
 | `linux-aarch64/` | Linux **and** `isAarch64` | Pi 5 hardware: V4L2 decoder passthrough + Immich HW transcode |
-| `darwin/` | `pkgs.stdenv.hostPlatform.isDarwin` | macOS packages, the launchd Filebrowser agent, and the `opl` LM Studio launcher |
+| `darwin/` | `pkgs.stdenv.hostPlatform.isDarwin` | macOS packages, the launchd Filebrowser agent, the `opl` LM Studio launcher, and the Roblox/Luau toolchain with Studio MCP wiring |
 
 ### core.nix
 
@@ -307,10 +311,11 @@ Configures [OpenCode](https://opencode.ai) — an AI coding assistant — via `p
 **Model:** Default model set to `opencode/deepseek-v4-flash-free`.
 
 **MCP server configuration:**
-- Defines a Gmail MCP server using `mcp-google-gmail` with paths to OAuth credentials and token
-- The server is **enabled by default** — set `programs.opencode.settings.mcp.gmail.enabled = false` to disable it
+- Servers live under `mcp.servers.<name>` (OpenCode 2 schema). The older flat `mcp.<name>` form is deprecated; `programs.opencode.validateFiles.config = true` validates the generated `opencode.json` against the schema shipped in the `opencode` package, so a drifted shape fails the build instead of silently disconnecting a server
+- Defines a Gmail MCP server using `mcp-google-gmail` with paths to OAuth credentials and token. It is **enabled by default** — set `programs.opencode.settings.mcp.servers.gmail.disabled = true` to disable it
 - Launches via `uv run --no-project --with "mcp-google-gmail" --with "mcp>=1.8.0,<2" mcp-google-gmail`, pinning `mcp<2` because `mcp-google-gmail` requires the `fastmcp` module that was removed in `mcp` 2.0.0
 - Defines a Firecrawl MCP server (`firecrawl-mcp`, **enabled**, keyed on `~/.config/firecrawl/api-key`) — see [`firecrawl.nix`](#firecrawlnix)
+- On macOS, [`roblox.nix`](#robloxnix) adds a `roblox` server that runs Roblox Studio's bundled MCP server through the `roblox-studio-mcp` wrapper
 
 **Skill deployment:**
 - Automatically discovers subdirectories under `skills/` and symlinks **every file** inside each into `~/.config/opencode/skills/<name>/`, preserving the relative layout (so a router `SKILL.md` can route to `GUIDE.md`, `references/*.md`, `templates/`, and `scripts/` from its deployed base directory)
@@ -504,6 +509,16 @@ opl --no-server        # do not auto-start LM Studio
 ```
 
 Tunables: `--ram-fraction` (default `0.85`), `--reserve-gib` (default `2`), `--max-context` (default `262144`).
+
+### roblox.nix
+
+macOS-only Roblox/Luau development layer. Roblox Studio itself is deliberately **not** packaged: it installs and updates through Roblox's own installer, and its MCP server ships inside the `.app`. Everything on our side of that boundary is pinned by nixpkgs.
+
+- **Toolchain** — `rojo` (filesystem ↔ DataModel), `selene` (lint), `stylua` (format), `luau-lsp`, `luau`, and `lune`. `wally` is intentionally absent because nixpkgs marks it `badPlatforms` on `aarch64-darwin`; pin its prebuilt release in a project's `devenv.nix` if a game ever needs packages.
+- **Studio MCP** — registers `mcp.servers.roblox` so OpenCode can read the game tree, edit scripts, run Luau, and drive playtests against an open Studio session. Tool enumeration is slower than a typical MCP server, hence explicit `timeout` values (`startup 60s`, `catalog 120s`, `execution 300s`).
+- **`roblox-studio-mcp`** — a wrapper installed by nix that locates Studio's bundled `StudioMCP` on macOS (or `%LOCALAPPDATA%\Roblox\mcp.bat` on Windows) and execs it, failing loudly when Studio is missing. Projects commit `.opencode/opencode.json` and `.mcp.json` that reference this name, so no absolute `.app` path ever lands in a repository.
+- **`luau-lsp-roblox`** — the language server OpenCode drives for `.luau`/`.lua`. It passes `--sourcemap=sourcemap.json` and `--definitions=globalTypes.d.luau` only when those files exist, because handing luau-lsp a missing path makes it fail at startup. Registered through `programs.opencode.settings.lsp`.
+- **Enabling it** — once in Studio: Assistant → `…` → Manage MCP Servers → *Enable Studio as MCP server*. The green indicator means a client connected. Studio scans `~/Documents/Roblox/Plugins` only at startup, so refresh the Rojo plugin by quitting Studio fully before reopening.
 
 ### glow.nix
 
@@ -770,6 +785,12 @@ Generates a system-design test paper from selected `~/system-design` topics and 
 
 Companion to `system-design-tester`. Reads a `questions-<timestamp>.md` paper (matched by the shared timestamp token), writes `answers-<timestamp>.md` and `.epub` with model answers, key points, rubrics, common mistakes, and source citations, grades a submitted attempt against the rubric, and explains the reasoning behind any question from the underlying source markdown.
 
+### roblox-git-bridge
+
+Attaches a Roblox Studio game to a GitHub repository and keeps four surfaces in agreement: `src/` (scripts), a tracked local `.rbxlx` (geometry), the live Studio session (disposable runtime), and `origin/main` (history). The router `SKILL.md` inlines the non-negotiables — files are the source of truth for scripts, the local place for geometry, cautious syncback by default, and a hard halt when both sides diverged. `GUIDE.md` holds the ordered playbook (preflight → attach the remote → map with Rojo → pin the toolchain in `devenv.nix` → build and open the local place → CI), and five references cover repository attachment, Rojo mapping, the Studio sync handshake and divergence table, Actions/Open Cloud publishing, and the gotchas log.
+
+`scripts/bootstrap.sh` scaffolds a repository idempotently (`--dry-run` prints the plan, existing files are never overwritten) from `templates/` (`roblox.json`, `default.project.json`, `devenv.nix`, `ci.yml`, `AGENTS.md`), and `scripts/repo/` carries the working helpers (`studio-open`, `studio-mcp`, `status`, `sync`, `preflight`, `publish`). The gotchas reference is the part worth reading first: it records ten failures — Studio only scanning plugins at startup, devenv 2.x's inert `enterTest`, the port clash, `open -a` not loading a place, Rojo silently overwriting Studio edits, `save_place` writing to disk only for local places, local places having no `placeId`, `wally` on Apple Silicon, Studio's own console noise, and flakes ignoring untracked files — each with the evidence that identifies it.
+
 ### update-docs
 
 Analyzes git changes (working tree diff + recent commits) to find and update stale documentation. Operates conservatively — only touching sections affected by real changes, never rewriting unrelated content.
@@ -966,6 +987,27 @@ The configuration is layered so Home Manager builds only the modules the host ca
 | `nitch`, `code-server`, `foliate`, `bluetuith`, `wifitui`, `exfatprogs` | installed | not built (use `fastfetch`, native Bluetooth/Wi-Fi/exFAT) |
 | HDD `/mnt/hdd`, Samba shares, drive backups, RPi USB-gadget, WayVNC | available (`make immich-*`, scripts) | **Linux-only** — scripts/targets exit with a clear message |
 
+### Roblox Studio Setup
+
+The macOS layer wires [Roblox Studio](https://create.roblox.com/docs/studio/mcp) into OpenCode so an agent can explore the DataModel, edit scripts, execute Luau, and run playtests. Studio is installed from Roblox, not from this flake.
+
+1. **Install Roblox Studio** and sign in.
+2. **Enable the MCP server** — Assistant → `…` → Manage MCP Servers → *Enable Studio as MCP server*. Check the green indicator once a client connects.
+3. **Install the Rojo plugin** inside the game repository: `rojo plugin install`. Studio only scans plugins at startup, so quit with `Cmd+Q` and reopen.
+4. **Verify** — `opencode mcp list` shows `✓ roblox`, and the agent can call `list_roblox_studios`.
+
+A project carries its own pins and bridge scripts; the local `roblox-git-bridge` skill scaffolds them (`roblox.json`, `default.project.json`, `devenv.nix`, `scripts/*.sh`). Operational rules that are easy to get wrong:
+
+| Rule | Why |
+|---|---|
+| Edit **scripts in files**, never in Studio | Rojo overwrites Studio-side script edits silently — it has no conflict detection |
+| Keep the **local `.rbxlx`** canonical, the cloud place a publish target | MCP `save_place` writes to disk only for local places; a cloud place saves a cloud version git never sees |
+| Launch Studio with `studio-open` (the binary), not `open -a` | `open -a RobloxStudio <file>` spawns a protocol-handler process that never loads the place ("Place is not open") |
+| One Rojo server | `rojo serve` and `devenv up` both want port 34872; the second one dies |
+| Match sessions by `placeId` or `file`, never by window title | A local place has no `placeId`, and two windows can share a name |
+
+Deeper material lives with the work itself: the game repository's `docs/RUNBOOK.md` (cold start, daily loop, sync gesture, troubleshooting) and the skill's `references/gotchas.md`, which records each failure together with the evidence that identifies it.
+
 ### Gmail MCP Setup
 
 Two paths: **automated** (recommended) or **manual** (understanding).
@@ -985,7 +1027,7 @@ The script will:
 5. Verify the MCP server is connected
 
 > **Note:** The MCP server is enabled by default. If you've disabled it, set
-> `programs.opencode.settings.mcp.gmail.enabled = true`
+> `programs.opencode.settings.mcp.servers.gmail.disabled = false`
 > in your flake configuration and run `home-manager switch`.
 
 #### Manual (step-by-step)
