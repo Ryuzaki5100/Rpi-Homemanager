@@ -47,7 +47,7 @@ the router.
 | Place scripts correctly / retrofit an existing game | `references/rojo-mapping.md` | Service mapping, file suffixes, sourcemap, package layout |
 | Drive Studio safely, sync both directions | `references/studio-sync.md` | MCP handshake, `save_place`, `syncback`, divergence table |
 | Set up Actions or publish the place | `references/ci-and-publish.md` | Workflow, pinned tools, Open Cloud secrets, tag gating |
-| Avoid repeating known failures | `references/gotchas.md` | Nine failures that cost real debugging time, with evidence |
+| Avoid repeating known failures | `references/gotchas.md` | Ten failures that cost real debugging time, with evidence |
 | Start a new project's identity file | `templates/roblox.json` | `repo`, `placeFile`, `game`, `sentinel` |
 | Start a new Rojo mapping | `templates/default.project.json` | Four-service tree with baseplate and spawn |
 | Pin the toolchain per repository | `templates/devenv.nix` | rojo/selene/stylua/luau-lsp/lune + scripts + tasks |

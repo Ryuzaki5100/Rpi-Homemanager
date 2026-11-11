@@ -101,6 +101,17 @@ ContentId: rbxassetid://203785492 failed due to: Asset type does not match reque
 - Fix: ignore, or report once with the Studio MCP `submit_feedback` tool. Do not
   "clean up" anything in the repository to chase it.
 
+## 10. A path flake ignores untracked files
+
+`home-manager switch --flake .#…` (and any `nix build` on a path flake) only
+sees files that git knows about. A newly created skill, module or script is
+invisible until it is added, and the error is a bare "path is not tracked by
+Git" — or worse, a silent no-op.
+
+- Evidence: `nix` warns `Path '…' in the repository '…' is not tracked by Git`.
+- Fix: `git add -N <path>` (or commit) before switching. Never conclude the
+  module is broken before checking `git status`.
+
 ## Meta-rule
 
 When two explanations fit, prefer the one with evidence you can reproduce in one
