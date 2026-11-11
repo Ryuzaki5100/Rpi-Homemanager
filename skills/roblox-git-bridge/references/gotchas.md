@@ -1,6 +1,6 @@
 ---
 name: roblox-git-bridge
-description: Nine Roblox/Rojo/devenv failures that cost real debugging time, with the evidence that identifies each one and the fix.
+description: Ten Roblox/Rojo/devenv/nix failures that cost real debugging time, with the evidence that identifies each one and the fix.
 ---
 
 # Gotchas that cost real time
