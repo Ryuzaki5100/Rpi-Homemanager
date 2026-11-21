@@ -27,11 +27,25 @@ ensure_repo() {
 		return 1
 	fi
 	mkdir -p "$(dirname "$DATA_DIR")"
+	local staging="${DATA_DIR}.clone-$$"
+	rm -rf "$staging"
 	info "cloning $REMOTE into $DATA_DIR"
-	git clone --branch "$BRANCH" "$REMOTE" "$DATA_DIR" >/dev/null 2>&1 || {
+	if ! git clone --branch "$BRANCH" "$REMOTE" "$staging" >/dev/null 2>&1; then
+		rm -rf "$staging"
 		info "clone failed — is the private repository readable by this host?"
 		return 1
-	}
+	fi
+	# Another process may have cloned while this one was running; an atomic
+	# rename means a half-written checkout is never visible as the data root.
+	if [ -e "$DATA_DIR" ] && [ -n "$(ls -A "$DATA_DIR" 2>/dev/null)" ]; then
+		rm -rf "$staging"
+		in_repo || {
+			info "$DATA_DIR appeared during the clone but is not a repository"
+			return 1
+		}
+		return 0
+	fi
+	mv "$staging" "$DATA_DIR"
 }
 
 LOCK_DIR=""
