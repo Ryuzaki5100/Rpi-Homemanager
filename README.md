@@ -761,7 +761,7 @@ The wobble/displacement, bloom, grain and lens stages run per pixel and dominate
 - **Sync** — `lh-sync` (`modules/common/lh-sync.sh`, installed as a `writeShellApplication`) is the single implementation used by the app bundle, the Linux service and the TUI. `init` clones, `pull` fast-forwards, `push` commits, `cycle` pushes while the server is idle, `status` prints one line. Nothing auto-merges: if the remote moved while local additions are unresolved, the pull is refused and the affected paths are reported.
 - **macOS** — `home.packages` ships `Applications/LearnHarness.app`; the darwin `copyApps` target installs it in `~/Applications`. Launching it pulls, serves on `127.0.0.1:4747`, opens the browser, and pushes on quit.
 - **Linux (including Raspberry Pi 5)** — `systemd.user.services.learnharness` runs the same server (`ExecStartPre = lh-sync pull`), and `learnharness-sync.timer` runs `lh-sync cycle` every five minutes, skipping while a turn is running. Teaching happens in a browser (locally or over the tailnet); `lhtui` browses records and runs opencode study sessions whose transcripts are saved under `study/`.
-- **Skills** — the learning-data skill and the generated plugin-authoring bundle are vendored into `skills/` and redeployed by [`opencode.nix`](#opencodenix); [`scripts/sync-learnharness-skill.sh`](#structure) re-vendors both from the built derivation and refuses on a version mismatch.
+- **Skills** — the learning-data skill and the generated plugin-authoring bundle are vendored into `skills/` and redeployed by [`opencode.nix`](#opencodenix); `scripts/sync-learnharness-skill.sh` re-vendors both from the built derivation and refuses on a version mismatch.
 
 ## Skills
 
