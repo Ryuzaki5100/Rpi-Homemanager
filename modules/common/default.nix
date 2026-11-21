@@ -20,5 +20,6 @@
     ./immich.nix
     ./filebrowser.nix
     ./mangal.nix
+    ./learnharness.nix
   ];
 }

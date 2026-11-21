@@ -15,6 +15,10 @@
       url = "github:pebble-dev/pebble.nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    learnharness-tui = {
+      url = "github:Ryuzaki5100/learnharness-tui";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
@@ -23,6 +27,7 @@
       home-manager,
       dripfetch,
       pebble,
+      learnharness-tui,
       ...
     }:
     let
@@ -78,6 +83,8 @@
                 gmail-mcp-auth = prev.callPackage ./pkgs/gmail-mcp-auth.nix { };
                 bitchat-cli = prev.callPackage ./pkgs/bitchat-cli.nix { };
                 archify = prev.callPackage ./pkgs/archify.nix { };
+                learnharness = prev.callPackage ./pkgs/learnharness.nix { };
+                lhtui = learnharness-tui.packages.${system}.default;
                 retrocrt = prev.callPackage ./pkgs/retrocrt.nix { };
                 pebble-sdk = prev.callPackage ./pkgs/pebble-sdk { };
                 inherit pypkjs;
@@ -159,6 +166,8 @@
             gmail-mcp-auth
             bitchat-cli
             archify
+            learnharness
+            lhtui
             retrocrt
             dripfetch
             pebble-sdk

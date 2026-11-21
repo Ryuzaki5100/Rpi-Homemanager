@@ -29,6 +29,7 @@ Personal Home Manager configuration for a terminal-centric workflow, shared acro
   - [glow.nix](#glownix)
   - [epub.nix](#epubnix)
   - [retrocrt.nix](#retrocrtnix)
+  - [learnharness.nix](#learnharnessnix)
 - [Skills](#skills)
 - [Custom Packages](#custom-packages)
   - [nixvim-editor](#nixvim-editor)
@@ -38,12 +39,15 @@ Personal Home Manager configuration for a terminal-centric workflow, shared acro
   - [gmail-mcp-auth](#gmail-mcp-auth)
   - [obsitui](#obsitui)
   - [retrocrt](#retrocrt)
+  - [learnharness](#learnharness)
+  - [lhtui](#lhtui)
 - [Quick Start](#quick-start)
   - [macOS Support](#macos-support)
   - [Roblox Studio Setup](#roblox-studio-setup)
   - [Gmail MCP Setup](#gmail-mcp-setup)
   - [Firecrawl Setup](#firecrawl-setup)
   - [Tailscale Setup](#tailscale-setup)
+  - [LearnHarness Setup](#learnharness-setup)
   - [Immich Setup](#immich-setup)
   - [Samba Shares](#samba-shares)
 - [Usage](#usage)
@@ -104,6 +108,7 @@ flake.nix  ──►  home.nix  ──►  modules/default.nix
 | `home-manager` | `github:nix-community/home-manager` (follows `nixpkgs`) |
 | `dripfetch` | `github:a-shygun/dripfetch?dir=packaging/nix` (follows `nixpkgs`; patched locally to exit cleanly on Ctrl+C) |
 | `pebble` | `github:pebble-dev/pebble.nix` (supplies the builder expressions; the SDK core, toolchain, QEMU, and Python/Node deps are packaged locally) |
+| `learnharness-tui` | `github:Ryuzaki5100/learnharness-tui` (follows `nixpkgs`; the `lhtui` terminal companion) |
 
 ### Custom Packages as Flake Outputs
 
@@ -117,6 +122,8 @@ nix run github:Ryuzaki5100/dotfiles#bitchat-cli
 nix run github:Ryuzaki5100/dotfiles#archify
 nix run github:Ryuzaki5100/dotfiles#retrocrt
 nix run github:Ryuzaki5100/dotfiles#dripfetch
+nix run github:Ryuzaki5100/dotfiles#learnharness
+nix run github:Ryuzaki5100/dotfiles#lhtui
 ```
 
 ## Structure
@@ -138,6 +145,8 @@ dotfiles/
 │   │   ├── glow.nix           # glow markdown themes & glow-set-theme picker
 │   │   ├── gmail-mcp.nix      # Gmail MCP auth packages
 │   │   ├── immich.nix         # Immich compose + options (platform-parameterized)
+│   │   ├── learnharness.nix    # LearnHarness app/TUI, data dir & lh-sync helper
+│   │   ├── lh-sync.sh          # Data-repo sync helper (pull/push/cycle/status)
 │   │   ├── mangal.nix         # Mangal downloader config
 │   │   ├── obsidian.nix       # Obsidian vaults & Basalt config
 │   │   ├── opencode.nix       # OpenCode config, MCP settings & skill deployment
@@ -147,6 +156,7 @@ dotfiles/
 │   │   └── packages.nix       # Cross-platform package set
 │   ├── linux/              # x86_64-linux + aarch64-linux
 │   │   ├── filebrowser.nix    # systemd user unit
+│   │   ├── learnharness.nix   # LearnHarness server + periodic data sync
 │   │   ├── immich.nix         # Enables the /etc/localtime bind-mount
 │   │   ├── mounts.nix         # ~/hdd -> /mnt/hdd activation
 │   │   └── packages.nix       # Linux-only package set
@@ -155,6 +165,7 @@ dotfiles/
 │   └── darwin/             # aarch64-darwin
 │       ├── filebrowser.nix    # launchd user agent
 │       ├── ghostty.nix        # Ghostty terminal, Nerd Font & ghostty-set-theme picker
+│       ├── learnharness.nix   # LearnHarness.app via the darwin copyApps target
 │       ├── opencode-lmstudio.nix # `opl`: opencode against loadable LM Studio models
 │       ├── opl.py             # RAM-aware model/context selection + LM Studio lifecycle
 │       ├── roblox.nix         # Roblox/Luau toolchain, Studio MCP wiring, luau-lsp wrapper
@@ -166,6 +177,7 @@ dotfiles/
 │   ├── bitchat-cli.nix    # bitchat CLI (PyPI, buildPythonApplication)
 │   ├── dripfetch-kbinterrupt.patch # Local patch: Ctrl+C exits dripfetch cleanly
 │   ├── gmail-mcp-auth.nix # Wrapper around gmail-mcp-auth.py (python + google-auth-oauthlib)
+│   ├── learnharness.nix   # LearnHarness v0.7.0 standalone server, .app and skill payload
 │   ├── nixvim-editor.nix  # Thin wrapper around external Nixvim flake
 │   ├── obsitui.nix        # Obsidian TUI from source (npm)
 │   └── retrocrt.nix       # Wrapper pinning ffmpeg, Pillow and the timestamp font
@@ -191,6 +203,7 @@ dotfiles/
 │   ├── setup-rpi-usb-gadget.sh # Configure RPi as USB ethernet gadget
 │   ├── setup-tailscale.sh     # Tailscale auth, status check, and systemd enable
 │   ├── setup-wayvnc.sh        # Set up WayVNC VNC server for iPad access
+│   ├── sync-learnharness-skill.sh # Re-vendor both LearnHarness skills from the built derivation
 │   ├── sync-rtk-plugin.sh     # Vendor the upstream RTK OpenCode plugin matching the locked rtk
 │   └── sync-to-ssd.sh         # Sync Immich albums to an external drive
 └── skills/
@@ -202,6 +215,8 @@ dotfiles/
     ├── hld-problems-generator/ # OpenCode skill: synthesize HLD practice problems + EPUB
     ├── job-grabber/       # OpenCode skill: verified weekly job-intel run + resume dispatch
     ├── job-search-resume-tailor/ # OpenCode skill: audited, evidence-backed JD→resume tailoring
+    ├── learnharness/     # OpenCode skill: read local teaching/practice records and the graph
+    ├── learnharness-plugins/ # OpenCode skill: portable LearnHarness plugin-authoring bundle
     ├── manga-merger/      # OpenCode skill: merge manga image folders into a fixed-layout EPUB
     ├── pebble-app/        # OpenCode skill: orchestrate a Pebble watchface/watchapp build
     ├── pebble-core/       # OpenCode skill: shared Pebble platform/docs/sample references
@@ -737,9 +752,28 @@ The wobble/displacement, bloom, grain and lens stages run per pixel and dominate
 | Audio silent/unplayable in Apple apps | The source is likely Opus/Vorbis; the default AAC transcode fixes it (`--copy-audio` opts out) |
 | Warnings about colourspace conversion | Harmless; the encode log is now quiet by default (`-loglevel error`) |
 
+### learnharness.nix
+
+[LearnHarness](https://learnharness.ai) — an agent harness for learning — built from the upstream `v0.7.0` tag, plus its terminal companion and a git-based sync layer. The Nix build produces the **Next.js standalone server**; the Electron shell is deliberately not built. On macOS a minimal `LearnHarness.app` starts that server and opens the browser.
+
+- **Build** — [`pkgs/learnharness.nix`](#learnharness) uses `buildNpmPackage`. `next/font/google` is replaced with the same OFL families served from `public/fonts`, so the build is offline. The four core plugins and the authoring skill come from their own pinned npm caches (`fetchNpmDeps`).
+- **Data** — `LH_DATA_DIR` points at `~/learning/learnharness-data`, a private git repository (`github:Ryuzaki5100/learnharness-data`) holding `chats/`, `graph/`, `study/`, `jobs/`, plugins and settings. Provider keys stay outside it in the app profile (`auth.json`), so the repository can be shared between machines safely.
+- **Sync** — `lh-sync` (`modules/common/lh-sync.sh`, installed as a `writeShellApplication`) is the single implementation used by the app bundle, the Linux service and the TUI. `init` clones, `pull` fast-forwards, `push` commits, `cycle` pushes while the server is idle, `status` prints one line. Nothing auto-merges: if the remote moved while local additions are unresolved, the pull is refused and the affected paths are reported.
+- **macOS** — `home.packages` ships `Applications/LearnHarness.app`; the darwin `copyApps` target installs it in `~/Applications`. Launching it pulls, serves on `127.0.0.1:4747`, opens the browser, and pushes on quit.
+- **Linux (including Raspberry Pi 5)** — `systemd.user.services.learnharness` runs the same server (`ExecStartPre = lh-sync pull`), and `learnharness-sync.timer` runs `lh-sync cycle` every five minutes, skipping while a turn is running. Teaching happens in a browser (locally or over the tailnet); `lhtui` browses records and runs opencode study sessions whose transcripts are saved under `study/`.
+- **Skills** — the learning-data skill and the generated plugin-authoring bundle are vendored into `skills/` and redeployed by [`opencode.nix`](#opencodenix); [`scripts/sync-learnharness-skill.sh`](#structure) re-vendors both from the built derivation and refuses on a version mismatch.
+
 ## Skills
 
 OpenCode skills are stored in `skills/` and auto-deployed to `~/.config/opencode/skills/<name>/` by the [`opencode.nix`](#opencodenix) module — every file in a skill directory is symlinked recursively, so a lean router `SKILL.md` can route to on-demand companions (`GUIDE.md`, `references/*.md`, `templates/`, `scripts/`) without bloating the always-loaded context.
+
+### learnharness
+
+Reads the local learning record — teaching and practice sessions, learner answers, confidence, thinking, practice submissions, propositions and reasoning chains — through the bundled read-only Python readers. Vendored from the app derivation with a short "Local setup (dotfiles)" section that points at `LH_DATA_DIR`; the same path is used by [`lhtui`](#lhtui) and the server. It never writes to the record.
+
+### learnharness-plugins
+
+The app's generated portable plugin-authoring bundle: `SKILL.md`, contracts, example plugin sources, portable SDK types and the local installer. Produced by the app's own `build-plugin-authoring` script, so relative links resolve without a checkout.
 
 ### skill-creator
 
@@ -900,6 +934,23 @@ Bundles [`scripts/retrocrt.py`](scripts/retrocrt.py) with a Python environment c
 | Runtime | Python 3 with `pillow`, pinned `ffmpeg`, `dejavu_fonts` |
 | Cache | `${XDG_CACHE_HOME:-~/.cache}/retrocrt/` |
 | Output | H.264 (`yuv420p`, `+faststart`), audio copied or aged with `--audio-age` |
+
+### learnharness
+
+The app derivation described in [`learnharness.nix`](#learnharnessnix):
+
+```bash
+nix build github:Ryuzaki5100/dotfiles#learnharness
+./result/bin/learnharness          # server on 127.0.0.1:4747
+```
+
+```bash
+nix run github:Ryuzaki5100/dotfiles#lhtui -- --data-dir ~/learning/learnharness-data
+```
+
+### lhtui
+
+The Go/Bubble Tea terminal companion from the `learnharness-tui` flake input: sessions, transcripts, graph search and opencode study sessions. Keybindings and design notes live in that repository's README.
 
 ## Quick Start
 
@@ -1147,6 +1198,35 @@ The script will:
 5. Write a `sudoers.d` file ensuring Nix binaries are on `secure_path` for sudo commands
 
 > **macOS:** install the app (`brew install --cask tailscale`); the same script launches it and runs `tailscale up`. The app manages the daemon and auto-starts it at login — no systemd unit or `sudoers` file is created.
+
+### LearnHarness Setup
+
+```bash
+# 1. Clone the private data repository (once per machine)
+lh-sync init
+
+# 2. Teach in the app (keys stay machine-local)
+learnharness              # macOS: launch ~/Applications/LearnHarness.app instead
+
+# 3. Browse the same record, or study from the terminal
+lhtui
+```
+
+On Linux the server is a user service:
+
+```bash
+systemctl --user status learnharness
+systemctl --user list-timers learnharness-sync.timer
+journalctl --user -u learnharness -f
+```
+
+To reach it from another machine over the tailnet, put the tailnet hostname in `LH_ALLOWED_HOSTS` for the service and proxy it deliberately:
+
+```bash
+tailscale serve --bg 4747
+```
+
+Sync rules live in [`lh-sync`](#learnharnessnix): a pull is refused only when the remote has new commits **and** the working tree has unresolved local changes; otherwise local work is committed and pushed. Resolve conflicts by hand — `lh-sync` never merges for you.
 
 ### Immich Setup
 

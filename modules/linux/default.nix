@@ -7,5 +7,6 @@
     ./mounts.nix
     ./immich.nix
     ./filebrowser.nix
+    ./learnharness.nix
   ];
 }

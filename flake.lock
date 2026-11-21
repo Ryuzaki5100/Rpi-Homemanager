@@ -117,6 +117,26 @@
         "type": "github"
       }
     },
+    "learnharness-tui": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1795266546,
+        "narHash": "sha256-d52ZuPqnE06f3br/hu5qBc8aw9oQonmvpnH2s6+xUvs=",
+        "owner": "Ryuzaki5100",
+        "repo": "learnharness-tui",
+        "rev": "bce68232b724e1d541b610b6a2a19c78055d1caa",
+        "type": "github"
+      },
+      "original": {
+        "owner": "Ryuzaki5100",
+        "repo": "learnharness-tui",
+        "type": "github"
+      }
+    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1793341285,
@@ -159,6 +179,7 @@
       "inputs": {
         "dripfetch": "dripfetch",
         "home-manager": "home-manager",
+        "learnharness-tui": "learnharness-tui",
         "nixpkgs": "nixpkgs",
         "pebble": "pebble"
       }
