@@ -124,11 +124,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1795266546,
-        "narHash": "sha256-d52ZuPqnE06f3br/hu5qBc8aw9oQonmvpnH2s6+xUvs=",
+        "lastModified": 1795267915,
+        "narHash": "sha256-abgEHRSUKbe3mGK7KPpBHBeAhfJmyPACH7dixYaHCLY=",
         "owner": "Ryuzaki5100",
         "repo": "learnharness-tui",
-        "rev": "bce68232b724e1d541b610b6a2a19c78055d1caa",
+        "rev": "fc774d46332486c87cd305f81c3fa9d5cc654447",
         "type": "github"
       },
       "original": {
