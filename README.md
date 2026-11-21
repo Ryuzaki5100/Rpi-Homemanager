@@ -494,19 +494,21 @@ ghostty-set-theme --reset             # back to Catppuccin Mocha
 macOS-only launcher (`opl`) that opens [opencode](#opencodenix) against [LM Studio](https://lmstudio.ai)'s headless local server, exposing **only** models that are present on disk and can actually run on this machine.
 
 - **Deployment** — lives in the `darwin/` layer, so the `opl` command, the pinned Python interpreter, and [`opl.py`](modules/darwin/opl.py) never exist on Linux hosts. Deployed with `pkgs.writers.writePython3Bin` (stdlib only) and added to `home.packages`.
-- **Server** — starts `lms server start` on demand (headless, default port `1234`) and reuses an already-running server.
-- **Inventory** — reads `lms ls --json --llm`, keeping LLMs with non-zero size. A model is dropped when `lms load <key> --estimate-only` exits non-zero (missing/incomplete files).
-- **Context sizing** — picks the largest power-of-two context (`8192` … model max) that fits the RAM budget: `0.85 × physical RAM − 2 GiB − already-loaded models`. GGUF models use LM Studio's own estimate at each candidate; MLX/flat estimates derive KV-cache bytes from the model's `config.json` (`text_config`).
-- **opencode config** — injected through `OPENCODE_CONFIG_CONTENT` (no edits to the managed `opencode.json`): `enabled_providers = ["lmstudio"]`, `model`/`small_model` set to the first loadable model, and a `lmstudio` provider with a whitelist of the selected models and their per-model context limits.
-- **Lifecycle** — opencode JIT-loads a model on the first request. The launcher snapshots loaded instances before launch and, when opencode exits (including `SIGINT`/`SIGTERM`/`SIGHUP`), unloads only the instances it created — models already loaded by Bionic are left alone.
+- **Server** — starts `lms server start` on demand (headless, default port `1234`) and reuses an already-running server. Before selecting models it runs `lms unload --all`, freeing the full RAM budget; this also unloads models held by Bionic.
+- **Inventory** — reads `lms ls --json --llm`, keeping LLMs with non-zero size. A model is dropped when `lms load <key> --estimate-only` exits non-zero (missing/incomplete files) or cannot fit the budget; every skipped model is reported with the reason.
+- **Context sizing** — picks the largest power-of-two context (`8192` … model max) that fits the RAM budget: `0.85 × physical RAM − 2 GiB − any models loaded after the initial unload`. GGUF models use LM Studio's own estimate at each candidate; MLX/flat estimates derive KV-cache bytes from the model's `config.json` (`text_config`).
+- **opencode config** — injected through `OPENCODE_CONFIG_CONTENT` (no edits to the managed `opencode.json`): `enabled_providers = ["lmstudio"]`, a default model, and a `lmstudio` provider displayed as **Local LLM** with a whitelist of the selected models and their per-model context limits. opencode is launched with `--standalone`; without its own private server the background service ignores `OPENCODE_CONFIG_CONTENT`, so `/model` never sees the local provider.
+- **Lifecycle** — opencode JIT-loads a model on the first request after the model is chosen with `/model` → **Local LLM**. The launcher snapshots loaded instances after the initial unload and, when opencode exits (including `SIGINT`/`SIGTERM`/`SIGHUP`), unloads the instances it created.
 
 ```bash
-opl                    # start server (if needed) and open opencode
+opl                    # unload all models, then open opencode
 opl -m lmstudio/qwen/qwen3.8-27b
-opl --print-config     # show the generated config + chosen contexts
+opl --print-config     # show the generated config + chosen contexts (no unload)
 opl --verbose          # explain model/context selection
 opl --no-server        # do not auto-start LM Studio
 ```
+
+Inside opencode, type `/model` and choose **Local LLM** to switch between the loadable local models. Selecting a model and sending a prompt triggers LM Studio's JIT load.
 
 Tunables: `--ram-fraction` (default `0.85`), `--reserve-gib` (default `2`), `--max-context` (default `262144`).
 

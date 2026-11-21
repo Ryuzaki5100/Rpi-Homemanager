@@ -1,10 +1,13 @@
 """Launch opencode against LM Studio's headless local server.
 
-Only models that are (a) present and complete on disk and (b) able to run on
-this machine at their advertised context are exposed to the opencode TUI.
+All models are unloaded first so the full RAM budget is available. Only models
+that are (a) present and complete on disk and (b) able to run on this machine
+at their advertised context are exposed to the opencode model picker under the
+"Local LLM" provider.
 
-The LM Studio server is started on demand, and any model it JIT-loads during
-the session is unloaded again once opencode exits.
+The LM Studio server is started on demand, opencode runs with its own private
+server (so it reads the generated config), and any model JIT-loaded during the
+session is unloaded again once opencode exits.
 """
 
 import argparse
@@ -98,6 +101,29 @@ def ensure_server(lms, args):
         time.sleep(0.25)
 
     die("LM Studio server did not start")
+
+
+def unload_all(lms, args):
+    """Free every model so the RAM budget reflects the full machine."""
+    log(args, "unloading all models")
+    try:
+        proc = run([lms, "unload", "--all"], timeout=120)
+    except (OSError, subprocess.TimeoutExpired) as error:
+        print(
+            f"opl: warning: could not unload all models: {error}",
+            file=sys.stderr,
+        )
+        return False
+
+    if proc.returncode != 0:
+        detail = proc.stderr.strip() or proc.stdout.strip() or "unknown error"
+        print(
+            f"opl: warning: could not unload all models: {detail}",
+            file=sys.stderr,
+        )
+        return False
+
+    return True
 
 
 def api_models(base_url):
@@ -228,7 +254,7 @@ def kv_bytes_per_token(model):
 
 
 def pick_context(model, lms, budget, args):
-    """Return the advertised context for a model, or None if it cannot run."""
+    """Return (context, None) on success or (None, reason) on failure."""
     max_context = min(
         int(model.get("maxContextLength") or CONTEXT_CANDIDATES[0]),
         args.max_context,
@@ -241,16 +267,17 @@ def pick_context(model, lms, budget, args):
 
     base = estimate(lms, model["modelKey"], 2048)
     if base is None:
-        log(args, f"{model['modelKey']}: not loadable (estimate failed)")
-        return None
+        return None, "memory estimate failed"
 
     top = estimate(lms, model["modelKey"], candidates[-1])
     flat = top is not None and abs(top["bytes"] - base["bytes"]) <= MIB
 
     if flat:
         if base["bytes"] > budget:
-            log(args, f"{model['modelKey']}: weights exceed RAM budget")
-            return None
+            return None, (
+                f"needs {base['bytes'] / GIB:.1f} GiB, "
+                f"budget is {budget / GIB:.1f} GiB"
+            )
 
         kv_per_token = kv_bytes_per_token(model)
         if kv_per_token:
@@ -262,29 +289,39 @@ def pick_context(model, lms, budget, args):
             chosen = min(max_context, 32768)
 
         if chosen is None:
-            log(args, f"{model['modelKey']}: no context fits RAM budget")
-            return None
+            return None, (
+                f"no context fits in the {budget / GIB:.1f} GiB budget"
+            )
         log(
             args,
             f"{model['modelKey']}: flash/flat estimate, context={chosen}",
         )
-        return chosen
+        return chosen, None
 
+    last_reason = "no context fits in the RAM budget"
     for context in reversed(candidates):
         result = estimate(lms, model["modelKey"], context)
-        if result is None or result["verdict"] == "fail":
+        if result is None:
+            last_reason = "memory estimate failed"
+            continue
+        if result["verdict"] == "fail":
+            last_reason = "LM Studio reports it will fail to load"
             continue
         if result["bytes"] > budget:
+            last_reason = (
+                f"needs {result['bytes'] / GIB:.1f} GiB at "
+                f"{context}-token context, budget is "
+                f"{budget / GIB:.1f} GiB"
+            )
             continue
         log(
             args,
             f"{model['modelKey']}: context={context} "
             f"estimate={result['bytes'] / GIB:.1f} GiB",
         )
-        return context
+        return context, None
 
-    log(args, f"{model['modelKey']}: no context fits RAM budget")
-    return None
+    return None, last_reason
 
 
 def build_config(selected, port, argv):
@@ -315,11 +352,10 @@ def build_config(selected, port, argv):
     config = {
         "enabled_providers": ["lmstudio"],
         "model": f"lmstudio/{first}",
-        "small_model": f"lmstudio/{first}",
         "provider": {
             "lmstudio": {
                 "api": f"{base_api}/v1",
-                "name": "LM Studio (local)",
+                "name": "Local LLM",
                 "npm": "@ai-sdk/openai-compatible",
                 "options": {
                     "baseURL": f"{base_api}/v1",
@@ -338,7 +374,6 @@ def build_config(selected, port, argv):
         for arg in argv
     ):
         config.pop("model", None)
-        config.pop("small_model", None)
 
     return config
 
@@ -356,12 +391,12 @@ def list_inventory(lms):
 
 def select_models(inventory, lms, args, budget):
     def probe(model):
-        context = pick_context(model, lms, budget, args)
+        context, reason = pick_context(model, lms, budget, args)
         if context is None:
-            return None
+            return None, (model["modelKey"], reason)
         copy = dict(model)
         copy["context"] = context
-        return copy
+        return copy, None
 
     available = [
         model
@@ -372,15 +407,17 @@ def select_models(inventory, lms, args, budget):
     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
         results = list(pool.map(probe, available))
 
-    selected = [model for model in results if model is not None]
-    if not selected:
-        die("no on-disk LM Studio model is loadable on this machine")
-    return selected
+    selected = [model for model, _ in results if model is not None]
+    skipped = [reason for _, reason in results if reason is not None]
+    return selected, skipped
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Launch opencode against loadable LM Studio models."
+        description=(
+            "Unload all LM Studio models, then launch opencode against the "
+            "loadable ones under the Local LLM provider."
+        )
     )
     parser.add_argument(
         "--print-config",
@@ -429,6 +466,11 @@ def main():
     port = ensure_server(lms, args)
     base_api = f"http://127.0.0.1:{port}"
 
+    # `--print-config` must stay side-effect free, so it assumes a clean
+    # machine rather than actually unloading anything.
+    if not args.print_config:
+        unload_all(lms, args)
+
     inventory = list_inventory(lms)
     sizes = {
         model["modelKey"]: int(model.get("sizeBytes") or 0)
@@ -436,7 +478,10 @@ def main():
         if model.get("modelKey")
     }
 
-    before_ids, preloaded_bytes = loaded_instances(base_api, lms, sizes)
+    if args.print_config:
+        before_ids, preloaded_bytes = set(), 0
+    else:
+        before_ids, preloaded_bytes = loaded_instances(base_api, lms, sizes)
 
     budget = int(total_ram * args.ram_fraction) - int(args.reserve_gib * GIB)
     budget -= preloaded_bytes
@@ -449,7 +494,21 @@ def main():
         f"(preloaded={preloaded_bytes / GIB:.1f} GiB)",
     )
 
-    selected = select_models(inventory, lms, args, budget)
+    selected, skipped = select_models(inventory, lms, args, budget)
+    for model_key, reason in skipped:
+        print(f"opl: skipping {model_key}: {reason}", file=sys.stderr)
+
+    if not selected:
+        die(
+            "no on-disk LM Studio model is loadable on this machine "
+            f"({len(skipped)} skipped)"
+        )
+
+    print(
+        f'opl: {len(selected)} local model(s) available under "Local LLM"',
+        file=sys.stderr,
+    )
+
     config = build_config(selected, port, opencode_argv)
 
     if args.print_config:
@@ -460,7 +519,13 @@ def main():
     env["OPENCODE_CONFIG_CONTENT"] = json.dumps(config)
     env["LMSTUDIO_API_KEY"] = "lm-studio"
 
-    proc = subprocess.Popen(["opencode", *opencode_argv], env=env)
+    # OpenCode's background service ignores OPENCODE_CONFIG_CONTENT. A private
+    # server is required for the generated Local LLM provider to reach /model.
+    launch = opencode_argv
+    if "--standalone" not in launch:
+        launch = ["--standalone", *launch]
+
+    proc = subprocess.Popen(["opencode", *launch], env=env)
 
     def forward(signum, _frame):
         try:
