@@ -169,7 +169,7 @@ buildNpmPackage {
     cp '${jetbrains-mono}/share/fonts/truetype/JetBrainsMono-Italic[wght].ttf' public/fonts/JetBrainsMono-Italic-wght.ttf
     cp '${source-sans}/share/fonts/truetype/SourceSans3-Regular.ttf' public/fonts/SourceSans3-Regular.ttf
     cp '${source-sans}/share/fonts/truetype/SourceSans3-It.ttf' public/fonts/SourceSans3-It.ttf
-    cp '${source-sans}/share/fonts/truetype/SourceSans3-SemiBold.ttf' public/fonts/SourceSans3-SemiBold.ttf
+    cp '${source-sans}/share/fonts/truetype/SourceSans3-Semibold.ttf' public/fonts/SourceSans3-SemiBold.ttf
     cp '${source-sans}/share/fonts/truetype/SourceSans3-Bold.ttf' public/fonts/SourceSans3-Bold.ttf
     chmod -R u+w public/fonts
 
