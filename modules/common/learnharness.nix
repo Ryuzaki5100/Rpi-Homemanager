@@ -17,10 +17,10 @@ let
   };
 in
 {
-  # `learnharness` (the server, and the .app bundle on macOS) and `lhtui`
-  # (the terminal companion) come from the flake overlay.
+  # The terminal companion and sync helper are shared; the LearnHarness app
+  # itself is the official release on macOS and the packaged server on Linux
+  # (modules/linux/learnharness.nix).
   home.packages = [
-    pkgs.learnharness
     pkgs.lhtui
     lhSync
   ];

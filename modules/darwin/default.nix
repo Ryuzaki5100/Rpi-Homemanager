@@ -8,7 +8,6 @@
     ./ghostty.nix
     ./opencode-lmstudio.nix
     ./roblox.nix
-    ./learnharness.nix
   ];
 
   # The App Management pre-check touches every managed .app bundle, which

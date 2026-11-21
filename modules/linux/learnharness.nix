@@ -5,7 +5,9 @@ let
   profileBin = "${config.home.profileDirectory}/bin";
 in
 {
-  # The same standalone server the macOS bundle runs, as a user service. It is
+  home.packages = [ pkgs.learnharness ];
+
+  # The same standalone server the desktop bundle runs, as a user service. It is
   # reachable on 127.0.0.1:4747; expose it over the tailnet deliberately with
   # `tailscale serve` (and LH_HOST/LH_ALLOWED_HOSTS documented in the README).
   systemd.user.services.learnharness = {

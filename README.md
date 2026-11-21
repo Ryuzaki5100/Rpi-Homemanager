@@ -145,7 +145,7 @@ dotfiles/
 │   │   ├── glow.nix           # glow markdown themes & glow-set-theme picker
 │   │   ├── gmail-mcp.nix      # Gmail MCP auth packages
 │   │   ├── immich.nix         # Immich compose + options (platform-parameterized)
-│   │   ├── learnharness.nix    # LearnHarness app/TUI, data dir & lh-sync helper
+│   │   ├── learnharness.nix    # lhtui, data dir & lh-sync helper
 │   │   ├── lh-sync.sh          # Data-repo sync helper (pull/push/cycle/status)
 │   │   ├── mangal.nix         # Mangal downloader config
 │   │   ├── obsidian.nix       # Obsidian vaults & Basalt config
@@ -165,7 +165,6 @@ dotfiles/
 │   └── darwin/             # aarch64-darwin
 │       ├── filebrowser.nix    # launchd user agent
 │       ├── ghostty.nix        # Ghostty terminal, Nerd Font & ghostty-set-theme picker
-│       ├── learnharness.nix   # LearnHarness.app via the darwin copyApps target
 │       ├── opencode-lmstudio.nix # `opl`: opencode against loadable LM Studio models
 │       ├── opl.py             # RAM-aware model/context selection + LM Studio lifecycle
 │       ├── roblox.nix         # Roblox/Luau toolchain, Studio MCP wiring, luau-lsp wrapper
@@ -759,7 +758,7 @@ The wobble/displacement, bloom, grain and lens stages run per pixel and dominate
 - **Build** — [`pkgs/learnharness.nix`](#learnharness) uses `buildNpmPackage`. `next/font/google` is replaced with the same OFL families served from `public/fonts`, so the build is offline. The four core plugins and the authoring skill come from their own pinned npm caches (`fetchNpmDeps`).
 - **Data** — `LH_DATA_DIR` points at `~/learning/learnharness-data`, a private git repository (`github:Ryuzaki5100/learnharness-data`) holding `chats/`, `graph/`, `study/`, `jobs/`, plugins and settings. Provider keys stay outside it in the app profile (`auth.json`), so the repository can be shared between machines safely.
 - **Sync** — `lh-sync` (`modules/common/lh-sync.sh`, installed as a `writeShellApplication`) is the single implementation used by the app bundle, the Linux service and the TUI. `init` clones, `pull` fast-forwards, `push` commits, `cycle` pushes while the server is idle, `status` prints one line. Nothing auto-merges: if the remote moved while local additions are unresolved, the pull is refused and the affected paths are reported.
-- **macOS** — `home.packages` ships `Applications/LearnHarness.app`; the darwin `copyApps` target installs it in `~/Applications`. Launching it pulls, serves on `127.0.0.1:4747`, opens the browser, and pushes on quit.
+- **macOS** — install the official signed release from [learnharness.ai](https://learnharness.ai). The app owns its Electron shell and updates; Home Manager only links its data directory, `~/Library/Application Support/LearnHarness/data`, to `~/learning/learnharness-data` so it reads and writes the synced record. Provider keys stay in that profile, outside the repository.
 - **Linux (including Raspberry Pi 5)** — `systemd.user.services.learnharness` runs the same server (`ExecStartPre = lh-sync pull`), and `learnharness-sync.timer` runs `lh-sync cycle` every five minutes, skipping while a turn is running. Teaching happens in a browser (locally or over the tailnet); `lhtui` browses records and runs opencode study sessions whose transcripts are saved under `study/`.
 - **Skills** — the learning-data skill and the generated plugin-authoring bundle are vendored into `skills/` and redeployed by [`opencode.nix`](#opencodenix); `scripts/sync-learnharness-skill.sh` re-vendors both from the built derivation and refuses on a version mismatch.
 
@@ -1206,7 +1205,8 @@ The script will:
 lh-sync init
 
 # 2. Teach in the app (keys stay machine-local)
-learnharness              # macOS: launch ~/Applications/LearnHarness.app instead
+#    macOS: install the official signed release from learnharness.ai
+#    Linux: the packaged server runs as the learnharness user service
 
 # 3. Browse the same record, or study from the terminal
 lhtui
