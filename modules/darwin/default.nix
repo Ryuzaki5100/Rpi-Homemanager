@@ -8,6 +8,7 @@
     ./ghostty.nix
     ./opencode-lmstudio.nix
     ./roblox.nix
+    ./roblox-agents.nix
   ];
 
   # The App Management pre-check touches every managed .app bundle, which

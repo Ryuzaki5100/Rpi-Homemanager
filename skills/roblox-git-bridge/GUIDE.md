@@ -56,6 +56,27 @@ client, and in CI, and it stops "works on my machine" drift. Verify with
 
 Do **not** rely on a global install alone; the repo must carry its own pins.
 
+## 4b. Decide the agent topology
+
+Before the first build, ask one question: **is this a single-agent project or a
+multi-agent one?** Attaching git and Rojo works the same either way; what changes
+is where the work queue lives.
+
+- Single-agent (one OpenCode session doing everything): keep `AGENTS.md` only.
+  Every later step works unchanged.
+- Multi-agent (parallel roles, scheduled work): add the vault from
+  `references/agent-workflow.md` — an Obsidian folder **outside** the repo, plus
+  `.noclip` and the `noclip` dispatcher. Do this before the first real task, not
+  after; the queue is where roles hand off, and retrofitting it means rewriting
+  in-flight notes.
+
+Why outside the repo: `files`-lane agents each work in their own git worktree. A
+vault committed inside the repo would be copied per worktree and every agent
+would see a different queue.
+
+Verify with `noclip doctor` (seven agents found, vault and repo are git repos,
+no stale studio lock).
+
 ## 5. First build and first connection
 
 1. `rojo build default.project.json -o place/<game>.rbxlx` — the place file is a
@@ -64,6 +85,11 @@ Do **not** rely on a global install alone; the repo must carry its own pins.
 3. In Studio: Plugins → Rojo → Connect. Studio must have been started **after**
    the plugin was installed (§ gotchas 1).
 4. Verify with the handshake in `references/studio-sync.md` before touching code.
+
+With a multi-agent setup, the first queued task should be the stdout/stderr canary
+from `references/agent-workflow.md` §6: a `qa` studio-lane task that proves
+play mode starts, the sentinel exists, and play mode stops. Refuse to dispatch
+anything else until it passes.
 
 ## 6. Daily loop (state this back to the user)
 
@@ -75,6 +101,15 @@ edit src/*.luau  →  Rojo pushes to Studio  →  playtest + console  →  save_
 Geometry: edit in Studio → `save_place` writes the tracked `.rbxlx` → commit.
 Scripts: edit files, never Studio.
 
+Multi-agent variant — same physics, different driver:
+
+```sh
+devenv up              # Rojo
+noclip status           # what is queued, who owns it
+noclip run --jobs 2     # dispatch; studio-lane tasks serialize themselves
+noclip merge <task-id>  # integrate a files-lane branch
+```
+
 ## 7. Sync gesture (cautious default, autosync on request)
 
 Use `git HEAD` as the last-synced baseline and compare three snapshots. The full
@@ -85,6 +120,10 @@ table and the halt conditions are in `references/studio-sync.md`; the short form
 - both changed differently → **halt**, print both diffs, never choose.
 
 Autosync applies only the unambiguous rows and still halts on the last one.
+
+In a multi-agent project the sync gesture belongs to the `builder` role, not to
+whichever agent happens to be running. Two agents saving the place file is the
+same class of bug as two agents merging at once.
 
 ## 8. Publish
 

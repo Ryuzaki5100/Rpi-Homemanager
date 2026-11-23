@@ -41,3 +41,25 @@ and the game name are independent — never derive one from the other.
 Commit `src/` and `place/` together when a change spans both. Keep `build/`,
 `sourcemap.json`, `globalTypes.d.luau` and binaries out of history. Never commit
 API keys or cookies.
+
+## Multi-agent workflow (if `.noclip` exists)
+
+The work queue and project memory live in the Obsidian vault named by `vault=`
+in `.noclip` — outside this repository, because each parallel task runs in its
+own git worktree.
+
+| Role | Owns | Never touches |
+|---|---|---|
+| `librarian` | task notes, ADRs | repo files |
+| `designer` | design notes | `src/`, Studio |
+| `scripter` | `src/`, Rojo mapping | `place/`, `save_place` |
+| `asset-smith` | Studio instances, asset manifest | scripts |
+| `audio` | cue sheets, `Sound` instances | `src/` |
+| `qa` | verification reports | any edit |
+| `builder` | merges, place file, publish | design decisions |
+
+- `noclip status` / `run` / `merge` / `doctor` — never move task notes by hand.
+- `files` lane: one git worktree per task (`.noclip-worktrees/`, gitignored).
+- `studio` lane: exactly one at a time, in this checkout, under a lock.
+- A task is `done` only when the agent exits 0.
+- If a task needs two roles, split it into two notes.

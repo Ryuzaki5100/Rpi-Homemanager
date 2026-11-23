@@ -6,6 +6,14 @@ let
       uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
       path = "${config.home.homeDirectory}/notes";
     };
+
+    # Game-project memory + task queue for the noclip agent workflow
+    # (modules/darwin/roblox-agents.nix). `noclip init` fills it; this only
+    # registers it so Obsidian/basalt can open it.
+    noclip = {
+      uuid = "7f2c9b1e-4d38-4a6f-9c05-b8e1d2a34f61";
+      path = "${config.home.homeDirectory}/roblox/noclip-protocol-vault";
+    };
   };
 in {
 

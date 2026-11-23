@@ -15,6 +15,8 @@ dry_run=0
 name=
 slug=
 repo=
+vault=
+agents=1
 
 while [ $# -gt 0 ]; do
 	case "$1" in
@@ -22,8 +24,10 @@ while [ $# -gt 0 ]; do
 		--name) name=${2:-}; shift 2 ;;
 		--slug) slug=${2:-}; shift 2 ;;
 		--repo) repo=${2:-}; shift 2 ;;
+		--vault) vault=${2:-}; shift 2 ;;
+		--no-agents) agents=0; shift ;;
 		-h|--help)
-			echo "usage: bootstrap.sh [--dry-run] --name 'Game Name' --slug game-slug [--repo repo-name]"
+			echo "usage: bootstrap.sh [--dry-run] --name 'Game Name' --slug game-slug [--repo repo-name] [--vault dir] [--no-agents]"
 			exit 0
 			;;
 		*)
@@ -36,6 +40,7 @@ done
 [ -n "$name" ] || { echo "bootstrap: --name is required" >&2; exit 2; }
 [ -n "$slug" ] || { echo "bootstrap: --slug is required" >&2; exit 2; }
 [ -n "$repo" ] || repo=$(basename "$(pwd)")
+[ -n "$vault" ] || vault="$(dirname "$(pwd)")/${slug}-vault"
 
 # CamelCase prefix for the sentinel and starter scripts: noclip-protocol -> NoclipProtocol
 prefix=$(printf '%s' "$slug" | awk -F- '{ for (i = 1; i <= NF; i++) printf toupper(substr($i, 1, 1)) substr($i, 2) }')
@@ -139,6 +144,23 @@ for script in studio-mcp.sh studio-open.sh status.sh sync.sh preflight.sh publis
 	fi
 done
 
+if [ "$agents" -eq 1 ]; then
+	plan ".noclip" "agent queue config"
+	if [ -f .noclip ]; then
+		plan ".noclip" "exists, left alone"
+	elif [ "$dry_run" -eq 1 ]; then
+		plan ".noclip" "would create (vault=$vault)"
+	elif command -v noclip >/dev/null 2>&1; then
+		# noclip writes .noclip with a vault path relative to this repo.
+		noclip init --vault "$vault" --repo "$(pwd)"
+	else
+		printf 'vault=%s\njobs=2\nworktrees=1\n' "$vault" >.noclip
+		plan ".noclip" "created (noclip not installed: vault left unscaffolded)"
+	fi
+else
+	plan ".noclip" "skipped (--no-agents)"
+fi
+
 if [ "$dry_run" -eq 1 ]; then
 	echo ""
 	echo "dry run: nothing written. Re-run without --dry-run to apply."
@@ -151,4 +173,9 @@ echo "  1. devenv test                      # pins the toolchain, builds once"
 echo "  2. rojo build default.project.json -o place/$slug.rbxlx"
 echo "  3. studio-open && connect the Rojo plugin"
 echo "  4. preflight                        # expect all ok"
-echo "  5. git add -A && git commit -m 'feat: scaffold $name with Rojo'"
+if [ "$agents" -eq 1 ]; then
+	echo "  5. noclip status                    # queue; read references/agent-workflow.md"
+	echo "  6. noclip run --once                # qa canary task first"
+else
+	echo "  5. git add -A && git commit -m 'feat: scaffold $name with Rojo'"
+fi

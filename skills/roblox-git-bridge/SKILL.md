@@ -48,6 +48,7 @@ the router.
 | Drive Studio safely, sync both directions | `references/studio-sync.md` | MCP handshake, `save_place`, `syncback`, divergence table |
 | Set up Actions or publish the place | `references/ci-and-publish.md` | Workflow, pinned tools, Open Cloud secrets, tag gating |
 | Avoid repeating known failures | `references/gotchas.md` | Ten failures that cost real debugging time, with evidence |
+| Run several agent roles at once | `references/agent-workflow.md` | vault topology, seven roles, studio lock, `noclip` |
 | Start a new project's identity file | `templates/roblox.json` | `repo`, `placeFile`, `game`, `sentinel` |
 | Start a new Rojo mapping | `templates/default.project.json` | Four-service tree with baseplate and spawn |
 | Pin the toolchain per repository | `templates/devenv.nix` | rojo/selene/stylua/luau-lsp/lune + scripts + tasks |
@@ -55,6 +56,28 @@ the router.
 | Give future agents the contract | `templates/AGENTS.md` | Repo-local operating rules |
 | Scaffold or repair a repository | `scripts/bootstrap.sh` | `--dry-run` plan, then idempotent apply |
 | Copy the working helper scripts into a new repo | `scripts/repo/` | `status`, `sync`, `preflight`, `studio-open`, `studio-mcp`, `publish` |
+
+## Role split (when the project goes multi-agent)
+
+Ask once, early: one agent session, or several roles working in parallel? If the
+answer is several, read `references/agent-workflow.md` and scaffold the vault
+before the first real task. The split that works:
+
+| Role | Owns | Lane |
+|---|---|---|
+| `librarian` | the queue, ADRs | files |
+| `designer` | systems, economy, numbers | files |
+| `scripter` | `src/`, Rojo mapping | files |
+| `asset-smith` | Studio instances, asset manifest | **studio** |
+| `audio` | cue sheets, `Sound` wiring | files → studio |
+| `qa` | verification only | **studio** |
+| `builder` | merges, build, publish | files |
+
+Two invariants make it safe: `files` tasks each get their own git worktree, and
+`studio` tasks run strictly one at a time in the main checkout (Studio is one
+mutable process; Rojo is bound to one directory). The queue is an Obsidian vault
+**outside** the repo — a vault inside it would be duplicated per worktree and
+every agent would see a different queue.
 
 ## Workflow
 
@@ -65,11 +88,13 @@ the router.
    (`templates/roblox.json`, `templates/default.project.json`, `references/rojo-mapping.md`).
 4. Add `devenv.nix`/`devenv.yaml`, project `.opencode/opencode.json` and `.mcp.json`
    so any MCP client finds the Studio server by name (`templates/devenv.nix`).
-5. Build and open the local place; prove the sentinel reaches Studio
+5. Decide single- vs multi-agent (`GUIDE.md` §4b). Multi-agent: `noclip init`,
+   then queue the `qa` canary task from `references/agent-workflow.md` §6.
+6. Build and open the local place; prove the sentinel reaches Studio
    (`references/studio-sync.md`).
-6. Add CI and `AGENTS.md` (`templates/ci.yml`, `templates/AGENTS.md`,
+7. Add CI and `AGENTS.md` (`templates/ci.yml`, `templates/AGENTS.md`,
    `references/ci-and-publish.md`).
-7. State the daily loop back to the user, and stop before anything that rewrites
+8. State the daily loop back to the user, and stop before anything that rewrites
    history or publishes.
 
 ## Output location / deployment

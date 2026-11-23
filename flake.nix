@@ -86,6 +86,8 @@
                 learnharness = prev.callPackage ./pkgs/learnharness.nix { };
                 lhtui = learnharness-tui.packages.${system}.default;
                 retrocrt = prev.callPackage ./pkgs/retrocrt.nix { };
+                noclip = prev.callPackage ./pkgs/noclip.nix { };
+                lore-ingest = prev.callPackage ./pkgs/lore-ingest.nix { };
                 pebble-sdk = prev.callPackage ./pkgs/pebble-sdk { };
                 inherit pypkjs;
                 pebble-tool = prev.callPackage ./pkgs/pebble-tool.nix {
@@ -169,6 +171,8 @@
             learnharness
             lhtui
             retrocrt
+            noclip
+            lore-ingest
             dripfetch
             pebble-sdk
             pebble-tool
