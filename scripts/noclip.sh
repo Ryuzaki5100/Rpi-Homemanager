@@ -602,7 +602,7 @@ cmd_doctor() {
 	fi
 
 	if [ -f "$VAULT/AGENTS.md" ]; then
-		for role in librarian designer scripter asset-smith audio qa builder; do
+		for role in librarian designer scripter asset-smith audio qa builder lore-keeper; do
 			if [ -f "$HOME/.config/opencode/agents/$role.md" ]; then
 				printf '  ok    agent %s\n' "$role"
 			else

@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import sys
 import time
@@ -147,8 +148,10 @@ def paginate(key: str, params: dict, cont_key: str):
 def vault_path(args) -> Path:
     if args.vault:
         return Path(args.vault).expanduser()
-    env = Path.home() / "roblox" / "noclip-protocol-vault"
-    return env
+    env = os.environ.get("NOCLIP_VAULT") or os.environ.get("LORE_VAULT")
+    if env:
+        return Path(env).expanduser()
+    return Path.home() / "roblox" / "noclip-protocol-vault"
 
 
 def cache_dir(vault: Path) -> Path:
