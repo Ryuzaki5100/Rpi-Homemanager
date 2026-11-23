@@ -699,7 +699,7 @@ cmd_doctor() {
 	fi
 
 	if [ -f "$VAULT/AGENTS.md" ]; then
-		for role in noclip librarian designer scripter asset-smith audio qa builder lore-keeper; do
+		for role in noclip librarian designer scripter asset-smith audio qa builder lore-keeper curator; do
 			if [ -f "$REPO/.opencode/agents/$role.md" ]; then
 				printf '  ok    agent %s\n' "$role"
 			else

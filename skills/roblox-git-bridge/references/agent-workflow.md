@@ -224,3 +224,25 @@ source article, generated rather than written:
 
 Rendered text is CC-BY-SA. Attribute per note and in `_attribution.md`, and quote
 rather than republish when moving text out of the vault.
+
+## 12. Media
+
+A lore corpus without pictures is half a reference. Keep the **manifest** in git
+and the **bytes** out of it:
+
+- `60-lore/_media.json` is committed: filename → original URL, thumbnail URL,
+  size, and which notes reference it.
+- `60-lore/_media/` is gitignored. A clone stays small; one command materialises
+  the cache, and it is resumable.
+- Note bodies carry `## Media` sections generated from the manifest, so a fresh
+  clone already has the links — only the pixels are missing.
+- Download thumbnails (800 px), not originals: 800 px is legible for maps and
+  ~530 MB instead of ~3.4 GB. Audio and video are small enough to take whole.
+- LFS is the alternative if you must commit media; it usually is not worth it for
+  a cache that is reproducible from a public source.
+
+For agents to actually *see* an image, the driving model must be multimodal.
+Text roles delegate to a read-only vision role (`curator` here) that reads the
+file and returns a structured description; the caller keeps its context small and
+its reasoning model unchanged.
+
