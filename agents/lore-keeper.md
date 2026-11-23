@@ -76,6 +76,21 @@ Every note is generated from one wiki page and carries:
 6. Keep `60-lore/_index.md` and `_attribution.md` current. They are the only
    files you author rather than generate.
 
+## Media
+
+The vault commits `60-lore/_media.json` (every file: URL, size, which notes use
+it) and gitignores `60-lore/_media/`. You own the fetch, not the bytes in git.
+
+- `lore-ingest media fetch --missing --jobs 4` materialises the cache; it is
+  resumable and never re-downloads what exists.
+- `lore-ingest media verify` is the acceptance check: present, missing, on disk.
+- `lore-ingest media manifest` re-resolves names after an ingest; it costs ~113
+  API requests, so run it only when the corpus gained media references.
+- Never commit `60-lore/_media/`. Never rename a file inside it. Never hand-edit
+  a `## Media` section; it is regenerated from the manifest by `render`.
+- A fresh clone has links and no bytes. That is correct. `FETCH-MEDIA.md` is the
+  runbook you follow when asked to fix it.
+
 ## What the corpus is for
 
 Agents building the game read **one note at a time** — the level, entity or

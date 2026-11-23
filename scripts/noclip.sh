@@ -428,12 +428,17 @@ install_agents() {
 		[ -e "$f" ] || continue
 		name=$(basename "$f")
 		if [ ! -f "$dest/$name" ]; then
+			rm -f "$dest/$name"
 			cp "$f" "$dest/$name"
+			chmod 644 "$dest/$name"
 			added=$((added + 1))
 		elif cmp -s "$f" "$dest/$name"; then
 			same=$((same + 1))
 		elif [ "$force" -eq 1 ]; then
+			# Store copies are read-only; remove before rewriting.
+			rm -f "$dest/$name"
 			cp "$f" "$dest/$name"
+			chmod 644 "$dest/$name"
 			changed=$((changed + 1))
 		else
 			warn "agents: $dest/$name differs from the installed set"

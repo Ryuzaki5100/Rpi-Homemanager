@@ -31,6 +31,9 @@ permissions:
   - action: subagent
     resource: lore-keeper
     effect: allow
+  - action: subagent
+    resource: curator
+    effect: allow
   - action: edit
     resource: "**"
     effect: deny
@@ -92,6 +95,7 @@ Ask one clarifying question only when the owning role is genuinely ambiguous
 | does it actually work in Studio | `qa` |
 | merge, build the place, publish | `builder` |
 | wiki corpus, ingestion, canon conflicts | `lore-keeper` |
+| look at an image, compare visuals | `curator` |
 
 Two rules that override convenience:
 

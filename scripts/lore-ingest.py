@@ -323,21 +323,39 @@ def yaml_value(value) -> str:
         return "true" if value else "false"
     if isinstance(value, int) or value is None:
         return str(value).lower() if value is None else str(value)
-    if isinstance(value, list):
-        # JSON flow sequence: valid YAML, and round-trips through json.loads,
-        # which is how `game_hooks` is read back before a re-render.
-        return json.dumps([str(v) for v in value], ensure_ascii=False)
     return yaml_quote(str(value))
 
 
 def yaml_quote(text: str) -> str:
+    """Quote only when YAML needs it, matching what Obsidian's formatter writes."""
+    lower = text.strip().lower()
+    plain = (
+        text != ""
+        and not text.startswith((" ", "-", "?", ":", "#", "&", "*", "!", "|", ">", "%", "@", "`"))
+        and not text.endswith(":")
+        and ": " not in text
+        and " #" not in text
+        and not any(ch in text for ch in "\n\t[]{},\"'")
+        and lower not in {"true", "false", "null", "yes", "no", "on", "off", "~"}
+    )
+    if plain:
+        return text
     return "'" + text.replace("'", "''") + "'"
 
 
 def frontmatter(fields: dict) -> str:
     lines = ["---"]
     for key, value in fields.items():
-        lines.append(f"{key}: {yaml_value(value)}")
+        if isinstance(value, list):
+            if not value:
+                lines.append(f"{key}: []")
+            else:
+                lines.append(f"{key}:")
+                lines.extend(f"  - {yaml_value(item)}" for item in value)
+        elif value is None:
+            lines.append(f"{key}:")
+        else:
+            lines.append(f"{key}: {yaml_value(value)}")
     lines.append("---")
     return "\n".join(lines)
 
@@ -352,11 +370,23 @@ def redirect_target(wikitext: str) -> str | None:
 TABLE = re.compile(r"^\{\|.*?^\|\}\s*$", re.M | re.S)
 FILE_LINK = re.compile(r"\[\[(?:File|Image):([^|\]]+)(?:\|[^\]]*)?\]\]", re.I)
 CHROME_IMAGE = re.compile(r"(site-logo|wiki-wordmark|favicon|badge|placeholder)", re.I)
+MEDIA_EXT = {
+    "png": "image", "jpg": "image", "jpeg": "image", "gif": "image",
+    "webp": "image", "bmp": "image", "svg": "image",
+    "mp3": "audio", "wav": "audio", "ogg": "audio", "m4a": "audio", "flac": "audio",
+    "mp4": "video", "webm": "video", "mov": "video", "ogv": "video",
+}
+
+
+def media_kind(name: str) -> str | None:
+    return MEDIA_EXT.get(Path(name).suffix.lower().lstrip("."))
 
 
 def is_content_image(name: str) -> bool:
     lower = name.strip().lower()
     if not lower or lower in {"none", "no", "image"}:
+        return False
+    if media_kind(name) is None:      # rejects `150px`, captions, template tokens
         return False
     if any(ch in name for ch in "{}[]<>"):
         return False
@@ -625,6 +655,16 @@ def cmd_render(args) -> int:
     used_slugs: set[str] = set()
     written = 0
     skipped = 0
+
+    # Media sections come from the committed manifest, so a fresh clone already
+    # has the links and only needs the bytes fetched into 60-lore/_media/.
+    manifest = load_manifest(vault)
+    media_by_note: dict[str, list[tuple[str, str]]] = {}
+    if manifest:
+        for name, entry in manifest["files"].items():
+            for note in entry.get("notes", []):
+                media_by_note.setdefault(note, []).append((name, entry["local"]))
+
     for title, entry in sorted(index["pages"].items()):
         kind = entry["type"]
         if args.only and kind not in set(args.only.split(",")):
@@ -678,6 +718,18 @@ def cmd_render(args) -> int:
         fields["tags"] = [kind]
 
         note = frontmatter(fields) + "\n\n" + f"# {title}\n\n" + body + "\n"
+        media = media_by_note.get(str(target.relative_to(vault)), [])
+        if media:
+            seen = []
+            for name, local in media:
+                if name not in [n for n, _ in seen]:
+                    seen.append((name, local))
+            shown = seen[:12]
+            block = ["", "## Media", ""]
+            block += [f"![{name}](../_media/{local})" for name, local in shown]
+            if len(seen) > len(shown):
+                block += ["", f"_{len(seen) - len(shown)} more in `_media-index.md`._"]
+            note += "\n".join(block) + "\n"
         write_text(target, note)
         written += 1
 
@@ -786,24 +838,288 @@ def field(head: str, key: str) -> str | None:
 
 
 def read_existing_hooks(path: Path) -> dict:
+    """Read `game_hooks` back before a re-render, tolerating either YAML style."""
     if not path.exists():
         return {}
     head = path.read_text().split("\n---", 1)[0]
     hooks: list[str] = []
+    in_list = False
     for line in head.splitlines():
         if line.startswith("game_hooks:"):
-            raw = line.split(":", 1)[1].strip()
-            if raw.startswith("["):
+            rest = line.split(":", 1)[1].strip()
+            if rest.startswith("["):
                 try:
-                    hooks = json.loads(raw)
+                    hooks = json.loads(rest)
                 except json.JSONDecodeError:
                     hooks = []
+                in_list = False
+            elif rest:
+                in_list = False
+            else:
+                in_list = True
+        elif in_list and line.strip().startswith("- "):
+            hooks.append(line.strip()[2:].strip().strip("'\""))
+        elif in_list and line and not line.startswith((" ", "\t")):
+            in_list = False
     return {"game_hooks": hooks}
 
 
 def write_text(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8")
+
+
+# ------------------------------------------------------------------- media
+
+# The manifest is the only committed artifact of the media pipeline: filenames,
+# resolved URLs, sizes and which notes reference them. The bytes live in
+# 60-lore/_media/ which is gitignored, so a clone stays small and `media fetch`
+# materialises the cache from the manifest alone (no wiki re-crawl).
+
+def local_name(name: str) -> str:
+    digest = hashlib.sha1(name.encode("utf-8")).hexdigest()[:10]
+    stem = re.sub(r"[^a-z0-9]+", "-", Path(name).stem.lower()).strip("-")[:60] or "file"
+    suffix = Path(name).suffix.lower()
+    return f"{digest}-{stem}{suffix}"
+
+
+def norm_title(name: str) -> str:
+    return name.replace("_", " ").strip().lower()
+
+
+def iter_note_images(vault: Path):
+    """Yield (note path, [image names]) for every note that references media.
+
+    Handles both flow (`images: ["a"]`) and block (`images:\\n  - a`) YAML,
+    because Obsidian or an external formatter may rewrite the frontmatter.
+    """
+    for path in sorted((vault / "60-lore").rglob("*.md")):
+        if path.name.startswith("_"):
+            continue
+        head = path.read_text().split("\n---", 1)[0]
+        names: list[str] = []
+        in_list = False
+        for line in head.splitlines():
+            if line.startswith("images:"):
+                rest = line[len("images:"):].strip()
+                if rest.startswith("["):
+                    try:
+                        names.extend(json.loads(rest))
+                    except json.JSONDecodeError:
+                        names.extend(re.findall(r"['\"]([^'\"]+)['\"]", rest))
+                    in_list = False
+                else:
+                    in_list = True
+            elif in_list and line.strip().startswith("- "):
+                names.append(line.strip()[2:].strip().strip("'\""))
+            elif in_list and line and not line.startswith((" ", "\t")):
+                in_list = False
+        if names:
+            yield (str(path.relative_to(vault)),
+                   [n for n in names if n and media_kind(n)])
+
+
+def load_manifest(vault: Path):
+    path = vault / "60-lore" / "_media.json"
+    if not path.exists():
+        return None
+    return json.loads(path.read_text())
+
+
+def media_manifest(vault: Path, width: int) -> int:
+    lore = vault / "60-lore"
+    notes: dict[str, list[str]] = {}
+    for rel, names in iter_note_images(vault):
+        for name in names:
+            notes.setdefault(name, []).append(rel)
+
+    requested = sorted(notes)
+    # Several spellings can normalise to the same MediaWiki title. Map the
+    # normalised form to every variant so a resolved page covers all of them.
+    by_norm: dict[str, list[str]] = {}
+    for name in requested:
+        by_norm.setdefault(norm_title(name), []).append(name)
+    log(f"resolving {len(requested)} media references")
+
+    entries: dict[str, dict] = {}
+    unresolved: list[str] = []
+    batches = list(chunk(requested, 50))
+    for i, batch in enumerate(batches, 1):
+        payload = api({
+            "action": "query", "prop": "imageinfo",
+            "iiprop": "url|size|mime", "iiurlwidth": str(width),
+            "titles": "|".join("File:" + n for n in batch),
+        })
+        for page in payload.get("query", {}).get("pages", []):
+            title = page.get("title", "")
+            canonical = title.split(":", 1)[-1]
+            variants = by_norm.get(norm_title(canonical), [])
+            if not variants:
+                continue
+            info = (page.get("imageinfo") or [None])[0]
+            if not info:
+                unresolved.extend(variants)
+                continue
+            merged_notes = sorted({n for v in variants for n in notes.get(v, [])})
+            entries[canonical] = {
+                "local": local_name(canonical),
+                "aliases": variants,
+                "mime": info.get("mime"),
+                "bytes": info.get("size", 0),
+                "url": info.get("url"),
+                "thumb": info.get("thumburl") or info.get("url"),
+                "notes": merged_notes,
+            }
+        if i % 20 == 0 or i == len(batches):
+            log(f"  {i}/{len(batches)} batches")
+        time.sleep(0.3)
+
+    covered = {v for entry in entries.values() for v in entry["aliases"]}
+    for name in requested:
+        if name not in covered and name not in unresolved:
+            unresolved.append(name)
+
+    total = sum(e["bytes"] for e in entries.values())
+    manifest = {
+        "generated": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "source": WIKI_BASE,
+        "license": "see 60-lore/_attribution.md (per-file licences are not exposed by Fandom)",
+        "thumb_width": width,
+        "count": len(entries),
+        "bytes": total,
+        "unresolved": sorted(set(unresolved)),
+        "files": entries,
+    }
+    (lore / "_media.json").write_text(json.dumps(manifest, indent=1, sort_keys=True))
+    write_media_index(vault, manifest)
+    log(f"manifest: {len(entries)} files, {total / 1024 / 1024:.0f} MB estimated, "
+        f"{len(manifest['unresolved'])} unresolved")
+    return 0
+
+
+def write_media_index(vault: Path, manifest: dict) -> None:
+    by_note: dict[str, list[tuple[str, dict]]] = {}
+    for name, entry in manifest["files"].items():
+        for note in entry.get("notes", []):
+            by_note.setdefault(note, []).append((name, entry))
+
+    lines = [
+        "---", "tags: [lore, media]", "---", "",
+        "# Media index", "",
+        f"{manifest['count']} files referenced by {len(by_note)} notes.",
+        "The bytes are **not** in git: run `lore-ingest media fetch` to materialise",
+        "`_media/` locally. See `FETCH-MEDIA.md`.", "",
+        "| Note | Media |", "|---|---|",
+    ]
+    for note in sorted(by_note):
+        names = sorted({n for n, _ in by_note[note]})
+        links = ", ".join(names[:4])
+        more = f" +{len(names) - 4}" if len(names) > 4 else ""
+        lines.append(f"| [{Path(note).stem}]({Path(note).relative_to('60-lore')}) | {links}{more} |")
+        lines.append(f"| [{Path(note).stem}]({Path(note).relative_to('60-lore')}) | {links}{more} |")
+    (vault / "60-lore" / "_media-index.md").write_text("\n".join(lines) + "\n")
+
+
+def media_fetch(vault: Path, manifest: dict, missing_only: bool, width: int,
+                jobs: int) -> int:
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    dest = vault / "60-lore" / "_media"
+    dest.mkdir(parents=True, exist_ok=True)
+
+    work = []
+    skipped = 0
+    for name, entry in manifest["files"].items():
+        target = dest / entry["local"]
+        if target.exists() and target.stat().st_size > 0:
+            skipped += 1
+            if missing_only:
+                continue
+            continue
+        url = entry["url"]
+        if entry.get("mime", "").startswith("image/") and entry.get("thumb"):
+            url = entry["thumb"]
+        work.append((name, url, target))
+
+    log(f"fetching {len(work)} files ({skipped} already present) with {jobs} workers")
+
+    def download(item):
+        name, url, target = item
+        if not url:
+            return (name, "no url")
+        for attempt in range(3):
+            try:
+                request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+                with urllib.request.urlopen(request, timeout=90) as response:
+                    data = response.read()
+                if not data:
+                    raise ValueError("empty body")
+                tmp = target.with_suffix(target.suffix + ".part")
+                tmp.write_bytes(data)
+                tmp.replace(target)
+                return (name, None)
+            except Exception as exc:  # network, 404, throttle
+                if attempt == 2:
+                    return (name, str(exc))
+                time.sleep(2 * (attempt + 1))
+        return (name, "exhausted")
+
+    failures = {}
+    done = 0
+    with ThreadPoolExecutor(max_workers=jobs) as pool:
+        futures = [pool.submit(download, item) for item in work]
+        for future in as_completed(futures):
+            name, error = future.result()
+            done += 1
+            if error:
+                failures[name] = error
+            if done % 250 == 0 or done == len(work):
+                log(f"  {done}/{len(work)} ({len(failures)} failed)")
+
+    fail_path = dest / "failures.json"
+    if failures:
+        fail_path.write_text(json.dumps(failures, indent=1, sort_keys=True))
+        log(f"{len(failures)} failures recorded in {fail_path.relative_to(vault)}")
+    elif fail_path.exists():
+        fail_path.unlink()
+    return 0 if not failures else 1
+
+
+def media_verify(vault: Path, manifest: dict) -> int:
+    dest = vault / "60-lore" / "_media"
+    present = 0
+    missing = []
+    for name, entry in manifest["files"].items():
+        target = dest / entry["local"]
+        if target.exists() and target.stat().st_size > 0:
+            present += 1
+        else:
+            missing.append(name)
+    on_disk = sum(p.stat().st_size for p in dest.glob("*") if p.is_file()) if dest.exists() else 0
+    print(f"manifest entries : {manifest['count']}")
+    print(f"present          : {present}")
+    print(f"missing          : {len(missing)}")
+    print(f"unresolved (wiki): {len(manifest.get('unresolved', []))}")
+    print(f"on disk          : {on_disk / 1024 / 1024:.0f} MB")
+    if missing[:5]:
+        print("  e.g. " + ", ".join(missing[:5]))
+    return 0 if not missing else 1
+
+
+def cmd_media(args) -> int:
+    vault = vault_path(args)
+    if args.action == "manifest":
+        return media_manifest(vault, args.width)
+
+    manifest = load_manifest(vault)
+    if manifest is None:
+        raise SystemExit("no 60-lore/_media.json: run `lore-ingest media manifest` first")
+
+    if args.action == "fetch":
+        return media_fetch(vault, manifest, args.missing, args.width, args.jobs)
+    if args.action == "verify":
+        return media_verify(vault, manifest)
+    raise SystemExit(f"unknown media action: {args.action}")
 
 
 # ------------------------------------------------------------------- verify
@@ -881,6 +1197,13 @@ def main() -> int:
 
     p = sub.add_parser("verify", help="coverage and quality report")
     p.set_defaults(func=cmd_verify)
+
+    p = sub.add_parser("media", help="resolve, fetch and verify wiki media")
+    p.add_argument("action", choices=["manifest", "fetch", "verify"])
+    p.add_argument("--jobs", type=int, default=4, help="parallel downloads (default 4)")
+    p.add_argument("--width", type=int, default=800, help="thumbnail width (default 800)")
+    p.add_argument("--missing", action="store_true", help="fetch only absent files")
+    p.set_defaults(func=cmd_media)
 
     args = parser.parse_args()
     if args.command == "sync":
