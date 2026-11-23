@@ -1,7 +1,7 @@
 ---
 description: Luau implementation. Edits src/ only, keeps the Rojo mapping honest, verifies with selene/stylua and a build.
 mode: all
-model: opencode/gpt-5.3-codex
+model: opencode-go/deepseek-v4.1-flash#high
 color: "#8bc39b"
 permissions:
   - action: edit

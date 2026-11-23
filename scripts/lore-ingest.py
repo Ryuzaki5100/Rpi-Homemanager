@@ -313,6 +313,7 @@ def chunk(items: list, size: int):
 
 def slugify(title: str) -> str:
     slug = title.lower().replace("'", "")
+    slug = slug.replace("!", "-excl").replace("?", "-q").replace("&", "-and")
     slug = re.sub(r"[^a-z0-9]+", "-", slug).strip("-")
     return slug or "page"
 
@@ -323,7 +324,9 @@ def yaml_value(value) -> str:
     if isinstance(value, int) or value is None:
         return str(value).lower() if value is None else str(value)
     if isinstance(value, list):
-        return "[" + ", ".join(yaml_quote(str(v)) for v in value) + "]"
+        # JSON flow sequence: valid YAML, and round-trips through json.loads,
+        # which is how `game_hooks` is read back before a re-render.
+        return json.dumps([str(v) for v in value], ensure_ascii=False)
     return yaml_quote(str(value))
 
 

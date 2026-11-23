@@ -1,7 +1,7 @@
 ---
 description: Integration and release. Merges agent branches, builds the place, verifies the sentinel, commits, and publishes only on explicit request.
 mode: all
-model: opencode/deepseek-v4.1-flash-free
+model: opencode-go/deepseek-v4.1-flash#high
 color: "#9b9b7b"
 permissions:
   - action: edit

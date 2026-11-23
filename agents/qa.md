@@ -1,7 +1,7 @@
 ---
 description: Playtest and verification. Runs the game, drives input, reads console output, captures screenshots, files reproducible failures. Read-only on code.
 mode: all
-model: opencode/deepseek-v4.1-flash-free
+model: opencode-go/deepseek-v4.1-flash#high
 color: "#c38b8b"
 permissions:
   - action: edit

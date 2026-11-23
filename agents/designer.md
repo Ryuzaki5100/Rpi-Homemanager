@@ -1,7 +1,7 @@
 ---
 description: Game design. Systems, loops, economy, progression, and the numbers behind them. Writes design notes, never code.
 mode: all
-model: opencode/claude-sonnet-5
+model: opencode-go/deepseek-v4.1-flash#high
 color: "#c39b8b"
 permissions:
   - action: edit

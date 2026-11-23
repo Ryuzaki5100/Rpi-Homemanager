@@ -1,7 +1,7 @@
 ---
 description: Vault keeper. Turns intent into task notes, keeps the queue honest, records decisions. Never edits game code.
 mode: all
-model: opencode/deepseek-v4.1-flash-free
+model: opencode-go/deepseek-v4.1-flash#low
 color: "#8b9dc3"
 permissions:
   - action: edit

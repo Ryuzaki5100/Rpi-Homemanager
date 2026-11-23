@@ -27,6 +27,7 @@ is the only reliable way to stop an agent from "helpfully" editing the wrong fil
 
 | Role | Owns | Writes | Forbidden | Lane | Model posture |
 |---|---|---|---|---|---|
+| `noclip` | deciding, delegating | `40-tasks/` | every other write | files | strongest (`v4-pro#high`) |
 | `librarian` | the queue and the record | task notes, ADRs | any repo file | files | cheapest |
 | `designer` | game design | `10-design/`, `00-brief/` | Luau, Studio | files | strongest (taste) |
 | `scripter` | Luau | `src/`, Rojo mapping | `place/`, `save_place` | files | code-specialist |
@@ -36,9 +37,14 @@ is the only reliable way to stop an agent from "helpfully" editing the wrong fil
 | `builder` | integration, release | merges, place file | design decisions | files | cheap + cautious |
 | `lore-keeper` | wiki corpus | `60-lore/` | code, design, `game_hooks` | files | cheapest |
 
-Definition files live outside the project (global OpenCode agents, e.g.
-`~/.config/opencode/agents/*.md`) so every Roblox project shares one role
-contract. Only the vault and `.noclip` are per project.
+Definition files are **project-scoped**: `noclip agents install` writes them to
+`<repo>/.opencode/agents/`, so they load only while working in that project (or a
+worktree of it) and the picker stays Build/Plan everywhere else. This is not just
+tidiness — permission rules bind to an absolute vault path, so a globally
+installed role set is only correct for one project. `noclip agents check` reports
+drift and `noclip doctor` fails on it.
+
+`noclip` itself is a primary agent: classify, queue or delegate, never implement.
 
 ### Division of labour, concretely
 

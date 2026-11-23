@@ -1,7 +1,7 @@
 ---
 description: Sound design. Cue sheets, SFX sourcing, Sound instance wiring, loudness and loop points. Files lane for sheets, Studio lane for insertion.
 mode: all
-model: opencode/gemini-3.8-flash
+model: opencode-go/deepseek-v4.1-flash#low
 color: "#b98bc3"
 permissions:
   - action: edit

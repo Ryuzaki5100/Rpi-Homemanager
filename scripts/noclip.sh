@@ -325,6 +325,10 @@ EOF
 		say "created: $repo/.noclip"
 	fi
 
+	if [ -n "${NOCLIP_AGENTS_DIR:-}" ] && [ -d "${NOCLIP_AGENTS_DIR}" ]; then
+		install_agents "$repo" 0 || true
+	fi
+
 	say ""
 	say "vault:  $vault"
 	say "repo:   $repo"
@@ -382,6 +386,94 @@ acceptance:
 ## Log
 EOF
 	say "$BACKLOG/$id.md"
+}
+
+# -------------------------------------------------------------------- agents
+
+# Agent definitions are project-scoped: they live in <repo>/.opencode/agents so
+# they exist for this project (and every worktree of it) and nowhere else. The
+# package ships the canonical set; this copies or verifies it.
+
+agents_source() {
+	[ -n "${NOCLIP_AGENTS_DIR:-}" ] || return 1
+	[ -d "${NOCLIP_AGENTS_DIR}" ] || return 1
+	printf '%s' "$NOCLIP_AGENTS_DIR"
+}
+
+agents_in_sync() {
+	src=$(agents_source) || return 0
+	dest="$REPO/.opencode/agents"
+	[ -d "$dest" ] || return 1
+	for f in "$src"/*.md; do
+		[ -e "$f" ] || continue
+		cmp -s "$f" "$dest/$(basename "$f")" || return 1
+	done
+	return 0
+}
+
+install_agents() {
+	target=$1
+	force=${2:-0}
+	src=$(agents_source) || {
+		warn "agents: NOCLIP_AGENTS_DIR is not set; skipping"
+		return 1
+	}
+	dest="$target/.opencode/agents"
+	mkdir -p "$dest"
+	added=0
+	changed=0
+	same=0
+	drift=0
+	for f in "$src"/*.md; do
+		[ -e "$f" ] || continue
+		name=$(basename "$f")
+		if [ ! -f "$dest/$name" ]; then
+			cp "$f" "$dest/$name"
+			added=$((added + 1))
+		elif cmp -s "$f" "$dest/$name"; then
+			same=$((same + 1))
+		elif [ "$force" -eq 1 ]; then
+			cp "$f" "$dest/$name"
+			changed=$((changed + 1))
+		else
+			warn "agents: $dest/$name differs from the installed set"
+			drift=$((drift + 1))
+		fi
+	done
+	say "agents: $dest — $added added, $changed updated, $same unchanged"
+	if [ "$drift" -gt 0 ]; then
+		warn "agents: $drift file(s) out of date; re-run with --force to overwrite"
+		return 1
+	fi
+	return 0
+}
+
+cmd_agents() {
+	mode=check
+	if [ $# -gt 0 ]; then
+		mode=$1
+		shift
+	fi
+	force=0
+	while [ $# -gt 0 ]; do
+		case "$1" in
+		--force) force=1; shift ;;
+		*) die "agents: unknown argument $1" ;;
+		esac
+	done
+	case "$mode" in
+	check)
+		src=$(agents_source) || die "agents: NOCLIP_AGENTS_DIR is not set"
+		if agents_in_sync; then
+			say "agents: in sync with $src"
+			return 0
+		fi
+		warn "agents: $REPO/.opencode/agents is missing or out of date"
+		return 1
+		;;
+	install) install_agents "$REPO" "$force" ;;
+	*) die "agents: use 'agents install [--force]' or 'agents check'" ;;
+	esac
 }
 
 # -------------------------------------------------------------------- status
@@ -602,14 +694,17 @@ cmd_doctor() {
 	fi
 
 	if [ -f "$VAULT/AGENTS.md" ]; then
-		for role in librarian designer scripter asset-smith audio qa builder lore-keeper; do
-			if [ -f "$HOME/.config/opencode/agents/$role.md" ]; then
+		for role in noclip librarian designer scripter asset-smith audio qa builder lore-keeper; do
+			if [ -f "$REPO/.opencode/agents/$role.md" ]; then
 				printf '  ok    agent %s\n' "$role"
 			else
-				printf '  FAIL  agent %s missing from ~/.config/opencode/agents\n' "$role"
+				printf '  FAIL  agent %s missing from .opencode/agents (run: noclip agents install)\n' "$role"
 				rc=1
 			fi
 		done
+		if ! agents_in_sync; then
+			printf '  WARN  .opencode/agents differs from the installed set (run: noclip agents install --force)\n'
+		fi
 	fi
 
 	wt=$(git -C "$REPO" worktree list 2>/dev/null | wc -l | tr -d ' ')
@@ -626,6 +721,8 @@ noclip $VERSION — vault-driven agent dispatcher for a Rojo Roblox project
 
   noclip init [--vault DIR] [--repo DIR]   scaffold an idempotent vault + .noclip
   noclip new "Title" [--agent ROLE] [--lane files|studio] [--priority N]
+  noclip agents install [--force]          copy roles into .opencode/agents
+  noclip agents check                      verify project roles match the package
   noclip status                            queue board, studio lock state
   noclip run [--once] [--jobs N] [--agent ROLE] [--dry-run]
   noclip merge TASK_ID                     merge noclip/TASK_ID into the branch
@@ -641,7 +738,7 @@ Config is read from the nearest .noclip walking up from the cwd:
   lock_wait=600              # seconds to wait for the studio lock
 
 Environment overrides: NOCLIP_VAULT NOCLIP_REPO NOCLIP_JOBS NOCLIP_WORKTREES
-NOCLIP_OPENCODE NOCLIP_FORMAT NOCLIP_LOCK_WAIT
+NOCLIP_OPENCODE NOCLIP_FORMAT NOCLIP_LOCK_WAIT NOCLIP_AGENTS_DIR
 EOF
 }
 
@@ -658,6 +755,7 @@ help | -h | --help) cmd_help ;;
 	load_config
 	case "$command" in
 	new) cmd_new "$@" ;;
+	agents) cmd_agents "$@" ;;
 	status) cmd_status ;;
 	run) cmd_run "$@" ;;
 	merge) cmd_merge "$@" ;;

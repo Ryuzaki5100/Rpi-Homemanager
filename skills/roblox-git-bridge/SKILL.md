@@ -65,6 +65,7 @@ before the first real task. The split that works:
 
 | Role | Owns | Lane |
 |---|---|---|
+| `noclip` | deciding, delegating (default primary) | files |
 | `librarian` | the queue, ADRs | files |
 | `designer` | systems, economy, numbers | files |
 | `scripter` | `src/`, Rojo mapping | files |

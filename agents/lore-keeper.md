@@ -1,7 +1,7 @@
 ---
 description: Wiki corpus keeper. Ingests and maintains the Backrooms lore corpus in the vault, normalizes notes, resolves canon conflicts. Never touches game code or design decisions.
 mode: all
-model: opencode/deepseek-v4.1-flash-free
+model: opencode-go/deepseek-v4.1-flash#low
 color: "#9b8bc3"
 permissions:
   - action: edit

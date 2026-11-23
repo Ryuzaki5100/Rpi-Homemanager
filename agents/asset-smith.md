@@ -1,7 +1,7 @@
 ---
 description: World and asset construction inside Studio. Meshes, textures, scenes, props, images. Studio lane only — serialized against other Studio agents.
 mode: all
-model: opencode/qwen4-max-free
+model: opencode-go/deepseek-v4.1-flash#high
 color: "#c3b98b"
 permissions:
   - action: edit
