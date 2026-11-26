@@ -1000,7 +1000,18 @@ hook_guard_bash() {
 		return 0
 	fi
 
-	# Workers may commit (and push, when a task explicitly says so); the
+	# Force-push is forbidden for every role. Checked only when a real push is
+	# present, so a commit message or log note mentioning the flags is fine.
+	local push_cmd force_flag
+	push_cmd="${prefix}(sudo[[:space:]]+)?git([[:space:]]+-C[[:space:]]+[^[:space:]]+)?[[:space:]]+push([[:space:]]|$)"
+	force_flag="(^|[[:space:]])(--force(-with-lease)?|-f)([[:space:]=]|$)|[[:space:]]\+[^[:space:]]"
+	if printf '%s' "$command" | grep -Eq "$push_cmd" &&
+		printf '%s' "$command" | grep -Eq "$force_flag"; then
+		hook_deny "force-push is forbidden in pro-dev"
+		return 0
+	fi
+
+	# Workers may commit and push (see the task's push: policy); the
 	# orchestrator delegates both. Headless workers carry PRODEV_WORKER=1
 	# because they run as a main thread with no agent_type.
 	case $agent in

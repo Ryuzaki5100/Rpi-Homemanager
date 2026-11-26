@@ -39,6 +39,10 @@ let
       command = "${prodev} status --line";
     };
 
+    # Settings permissions are session-wide: they cannot express "workers may
+    # push, the orchestrator may not". Role policy therefore lives in
+    # `prodev hook guard-bash`, which sees `agent_type`. Only rules that are
+    # right for every role stay here.
     permissions = {
       allow = [
         "Read"
@@ -46,7 +50,6 @@ let
         "Glob"
       ];
       deny = [
-        "Bash(git push:*)"
         "Bash(rm -rf:*)"
       ];
     };
@@ -65,20 +68,18 @@ let
       allow = [
         "Bash(prodev:*)"
         "Bash(gh:*)"
-        "Bash(git status:*)"
-        "Bash(git log:*)"
-        "Bash(git diff:*)"
-        "Bash(git merge:*)"
+        # All git commands are pre-approved for the session so a background
+        # worker never stalls on an approval prompt. The hook still denies the
+        # orchestrator's commit/push and everyone's force-push/destructive
+        # commands, which is the only layer that knows the agent type.
+        "Bash(git:*)"
         "Bash(rg:*)"
         "Bash(ls:*)"
         "Bash(find:*)"
       ];
-      deny = [
-        "Bash(git push:*)"
-        "Bash(git reset --hard:*)"
-        "Bash(git clean -fdx:*)"
-        "Bash(rm -rf:*)"
-      ];
+      # No deny list here: these settings apply to the whole session, workers
+      # included. Commit/push/destructive rules are enforced by
+      # `prodev hook guard-bash`, which can tell the orchestrator from a worker.
     };
     hooks = {
       # Re-inject the vault after every start, resume, clear and compaction.
@@ -146,10 +147,8 @@ let
       permissions = {
         defaultMode = "acceptEdits";
         allow = [ "Bash" "Read" "Write" "Edit" "Grep" "Glob" "TodoWrite" ];
-        deny = [
-          "Bash(git push:*)"
-          "Bash(git reset --hard:*)"
-        ];
+        # No deny list: `prodev hook guard-bash` blocks force-push and the
+        # destructive commands for workers too, and it has the agent type.
       };
     };
 in

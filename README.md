@@ -878,7 +878,8 @@ vault=/Volumes/ssd/vaults/<project>
 ### Safety rails
 
 - `pro-dev` has no write tools (OpenCode: `edit ** deny`; Claude: no `Write`/`Edit`, plus `Agent(pro-worker, pro-worker-lite)` so it cannot spawn anything else)
-- `prodev hook guard-spawn` denies the third concurrent worker; `prodev hook guard-bash` blocks destructive commands for everyone, lets workers commit/push, and keeps commit/push away from the orchestrator
+- `prodev hook guard-spawn` denies the third concurrent worker; `prodev hook guard-bash` blocks destructive commands and force-push for everyone, lets workers commit/push, and keeps commit/push away from the orchestrator
+- Push is deliberately **not** a settings-level deny: Claude settings apply to the whole session (workers included) and cannot be scoped by agent type, so role policy lives in the hook, which sees `agent_type`
 - `prodev merge <id>` refuses a blocked task, a missing worker report, a missing
   branch or a dirty tree, aborts on conflict, and records the merge commit; add
   `--push` only when the user explicitly asks to push
