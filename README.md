@@ -400,7 +400,7 @@ Renders the shared role definitions into both tools from one source:
 |---|---|---|
 | `pro-dev` | `deepseek-v4-pro#high` | `opus`, effort `high`, `Agent(pro-worker, pro-worker-lite)` allowlist, no write tools |
 | `pro-worker` | `deepseek-v4.1-flash#medium` | `sonnet`, effort `high`, `isolation: worktree` |
-| `pro-worker-lite` | `deepseek-v4.1-flash#low` | `haiku`, effort `medium`, `isolation: worktree` |
+| `pro-worker-lite` | `deepseek-v4.1-flash#low` | `haiku`, effort `medium` (runs in the main checkout, so it can drive Studio) |
 
 **MCP tools in agent sessions.** Home Manager wires the MCP servers through a generated plugin named `hm`, so Claude Code scopes their tools as `mcp__plugin_hm_<server>__<tool>` — not `mcp__<server>__*`. The role `tools:` allowlists therefore include both the scoped form and the unscoped fallback for Roblox Studio and Firecrawl, which is what makes Studio usable from `ccp` and from dispatched workers. Gmail is deliberately left out of agent sessions; add `mcp__plugin_hm_gmail__*` to a role if you want it there.
 

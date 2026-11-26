@@ -200,7 +200,6 @@ in
       model = "haiku";
       effort = "medium";
       tools = "Read, Write, Edit, Bash, Grep, Glob, TodoWrite, ${mcpTools "roblox"}, ${mcpTools "firecrawl"}";
-      isolation = "worktree";
       maxTurns = 60;
     };
   };
