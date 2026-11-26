@@ -52,6 +52,10 @@
         system:
         import nixpkgs {
           inherit system;
+          # Mirrors home.nix's nixpkgs.config: passing `pkgs` explicitly to
+          # homeManagerConfiguration bypasses the module's config, so the
+          # real import needs it (claude-code is unfree).
+          config.allowUnfree = true;
           overlays = [
             (final: prev:
               let
