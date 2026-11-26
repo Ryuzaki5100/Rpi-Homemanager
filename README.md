@@ -876,6 +876,16 @@ vault=/Volumes/ssd/vaults/<project>
 - `prodev hook guard-spawn` denies the third concurrent worker; `prodev hook guard-bash` blocks push/reset/clean and keeps commits with the workers
 - `prodev doctor` checks the pointer, the vault, `gh auth`, and both CLIs
 
+### GitHub auth
+
+`prodev issue` shells out to `gh`, so the CLI must be authenticated separately — the token is never part of this repository:
+
+```fish
+gh auth login --hostname github.com --git-protocol ssh --scopes repo,read:org,gist
+```
+
+`gh` keeps the token in the macOS keychain (or `~/.config/gh/hosts.yml`, `0600`). If a background or non-GUI process cannot reach the keychain, re-run the login with `--insecure-storage` to keep it file-based; `prodev doctor` reports `ok gh auth` or prints the exact command to run.
+
 ### learnharness
 
 Reads the local learning record — teaching and practice sessions, learner answers, confidence, thinking, practice submissions, propositions and reasoning chains — through the bundled read-only Python readers. Vendored from the app derivation with a short "Local setup (dotfiles)" section that points at `LH_DATA_DIR`; the same path is used by [`lhtui`](#lhtui) and the server. It never writes to the record.

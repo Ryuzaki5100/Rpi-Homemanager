@@ -933,7 +933,12 @@ cmd_doctor() {
 	fi
 	check "git" git --version
 	check "gh" gh --version
-	check "gh auth" gh auth status
+	if gh auth status >/dev/null 2>&1; then
+		say "ok    gh auth"
+	else
+		say "FAIL  gh auth — run: gh auth login --hostname github.com --git-protocol ssh --scopes repo,read:org,gist"
+		rc=1
+	fi
 	check "jq" jq --version
 	check "opencode" opencode --version
 	check "claude" claude --version
