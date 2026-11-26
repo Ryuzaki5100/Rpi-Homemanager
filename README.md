@@ -873,12 +873,15 @@ vault=/Volumes/ssd/vaults/<project>
 1. `prodev issue new --type feature --title "…"` — every plan, feature, bug fix and chore gets a detailed issue (context, plan, files, acceptance, verification) before code
 2. `prodev task new --title "…" --tier work|lite --files a.ts,b.ts` — the `files:` list is what keeps two workers apart; `tier lite` routes GitHub chores and trivial fixes to Haiku / flash-low. Add `--push` when the task is allowed to push its branch; without it a worker only commits
 3. `prodev dispatch [--tool opencode|claude] [--slots 2]` — refuses tasks without an issue, refuses overlapping file sets, gives each worker a worktree and branch `prodev/<id>`, tees logs to `50-log/workers/`, releases the lease
-4. The orchestrator merges a green branch, closes the issue with what changed and how it was verified, and marks the task done
+4. `prodev merge <id>` merges the branch only when the worker left a report and the tree is clean (aborts on conflict), then the orchestrator closes the issue with what changed and how it was verified, and marks the task done. `--push` is only for an explicit user request
 
 ### Safety rails
 
 - `pro-dev` has no write tools (OpenCode: `edit ** deny`; Claude: no `Write`/`Edit`, plus `Agent(pro-worker, pro-worker-lite)` so it cannot spawn anything else)
 - `prodev hook guard-spawn` denies the third concurrent worker; `prodev hook guard-bash` blocks destructive commands for everyone, lets workers commit/push, and keeps commit/push away from the orchestrator
+- `prodev merge <id>` refuses a blocked task, a missing worker report, a missing
+  branch or a dirty tree, aborts on conflict, and records the merge commit; add
+  `--push` only when the user explicitly asks to push
 - Commands are matched only at a command position, so a log message or commit body that merely mentions `rm -rf` is not blocked
 - `prodev doctor` checks the pointer, the vault, `gh auth`, and both CLIs
 
@@ -1011,8 +1014,9 @@ Used as the system `EDITOR` and referenced by Basalt keybindings for opening not
 | `init` / `vault link` | write `.prodev`, scaffold and git-init the vault |
 | `status [--line]` | vault, task counts, live leases (also the Claude statusline) |
 | `context` | rehydration pack after a fresh session or a compaction |
-| `task new\|claim\|done` | queue with leases; one note per task |
+| `task new\|claim\|done` | queue with leases; one note per task; `--push` marks it pushable |
 | `dispatch` | claim up to 2 disjoint tasks, worktree per task, tee logs |
+| `merge` | merge `prodev/<id>` after a verified report; refuses dirty/blocked/no-report, aborts on conflict, `--push` on request |
 | `issue new\|close\|check` | the issue-first workflow, from `ai/templates/issue.md` |
 | `log` | append an orchestrator/worker log note |
 | `claude` | preflight + `exec claude` with the pro overlay (used by `ccp`) |

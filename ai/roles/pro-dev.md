@@ -46,9 +46,11 @@ user where it is.
    per task, and refuses overlapping file sets. Choose `tier work` for real
    implementation and `tier lite` for GitHub chores, commits, lint/format,
    docs bumps and trivial fixes.
-6. **Integrate.** Merge a worker branch only when the tree is clean and its
-   checks passed: `git merge --no-ff prodev/<id>`. A conflict is a new task for
-   a worker, never a guess.
+6. **Integrate.** `prodev merge <id>`. It refuses a blocked task, a note with no
+   worker report, a missing branch, or a dirty tree; aborts cleanly on conflict
+   and marks the task blocked; records the merge commit in the vault. Pass
+   `--push` **only** when the user explicitly asked to push — otherwise origin
+   waits.
 7. **Close.** `prodev issue close <number> --task <id> --summary "what changed
    and how it was verified"`, then `prodev task done <id>`.
 

@@ -28,6 +28,7 @@ prodev — plan, file, dispatch, verify
   task claim <id>                     take the lease for a task
   task done <id> [--report-file F]     move to done, release the lease
   dispatch [--tool opencode|claude] [--slots N] [--dry-run]
+  merge <id> [--push]                 merge prodev/<id> after a verified report
   issue new --type T --title T [--task id]
   issue close <number> [--task id] [--summary S]
   issue check                         list open issues
@@ -305,7 +306,6 @@ tags: [brief]
 EOF
 
 	printf '.locks/\n.DS_Store\n.obsidian/workspace*\n' >"$target/.gitignore"
-
 	if [ ! -d "$target/.git" ]; then
 		git -C "$target" init -q
 		git -C "$target" add -A
@@ -313,6 +313,16 @@ EOF
 		say "created: $target (git repository)"
 	else
 		say "kept:    $target"
+	fi
+
+	# The pointer and the ignore entries are part of the setup, and the
+	# orchestrator cannot commit them itself. Commit just those two paths.
+	if [ -d "$repo/.git" ]; then
+		git -C "$repo" add -- .prodev .gitignore 2>/dev/null || true
+		if ! git -C "$repo" diff --cached --quiet -- .prodev .gitignore 2>/dev/null; then
+			git -C "$repo" commit -qm "chore(prodev): add vault pointer and ignore entries" -- .prodev .gitignore || true
+			say "committed: .prodev, .gitignore"
+		fi
 	fi
 
 	say ""
@@ -742,6 +752,61 @@ cmd_dispatch() {
 	[ "$failed" -eq 0 ] || warn "$failed worker(s) failed; tasks stay active with status blocked"
 }
 
+# ---------------------------------------------------------------- merge
+
+cmd_merge() {
+	local id=${1:-} push=0
+	shift || true
+	[ "${1:-}" = "--push" ] && push=1
+	[ -n "$id" ] || die "merge: missing task id"
+
+	local repo vault note status branch base sha
+	repo=$(repo_root) || die "not inside a project"
+	vault=$(require_vault "$repo")
+	set_vault "$vault"
+
+	note=$(task_note "$id") || die "task $id not found"
+	status=$(fm "$note" status)
+	branch="prodev/$id"
+
+	case $status in
+	blocked) die "task $id is blocked; fix it with a worker before merging" ;;
+	done | merged) die "task $id is already $status" ;;
+	esac
+	grep -q '^## Result' "$note" || die "task $id has no worker report; nothing to merge"
+	git -C "$repo" show-ref --verify --quiet "refs/heads/$branch" ||
+		die "branch $branch does not exist"
+	# `.gitignore` and `.prodev` are excluded: `prodev init` appends the
+	# vault/worktree entries and writes the pointer, and those setup edits must
+	# not block a merge (init commits them when it runs inside a repository).
+	if [ -n "$(git -C "$repo" status --porcelain -- . ':(exclude).gitignore' ':(exclude).prodev')" ]; then
+		die "working tree is dirty; commit or stash before merging"
+	fi
+
+	base=$(git -C "$repo" symbolic-ref --short HEAD)
+	[ "$base" = "main" ] || warn "merging into $base, not main"
+
+	if ! git -C "$repo" merge --no-ff "$branch" -m "merge: $id"; then
+		git -C "$repo" merge --abort 2>/dev/null || true
+		set_fm "$note" status blocked
+		printf '\n## Merge conflict\n\n`git merge --no-ff %s` conflicted on %s. Resolve it with a worker task; never resolve by guesswork.\n' \
+			"$branch" "$(date '+%Y-%m-%d %H:%M')" >>"$note"
+		vault_commit "merge: conflict $id"
+		die "merge conflict on $branch; task $id marked blocked"
+	fi
+
+	sha=$(git -C "$repo" rev-parse --short HEAD)
+	set_fm "$note" status merged
+	printf '\n- merged %s into %s at %s\n' "$sha" "$base" "$(date '+%Y-%m-%d %H:%M')" >>"$note"
+	vault_commit "merge: $id -> $base"
+	say "merged: $id ($sha) into $base"
+
+	if [ "$push" -eq 1 ]; then
+		git -C "$repo" push origin "$base" || die "push of $base failed"
+		say "pushed: $base"
+	fi
+}
+
 # ---------------------------------------------------------------- issues
 
 cmd_issue() {
@@ -1014,6 +1079,7 @@ status) cmd_status "$@" ;;
 context) cmd_context "$@" ;;
 task) cmd_task "$@" ;;
 dispatch) cmd_dispatch "$@" ;;
+merge) cmd_merge "$@" ;;
 issue) cmd_issue "$@" ;;
 log) cmd_log "$@" ;;
 claude) cmd_claude "$@" ;;
