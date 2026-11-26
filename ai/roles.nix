@@ -10,6 +10,13 @@
 #
 # Both workers exist so the orchestrator can pick a model per task without
 # inventing a new role; at most two of them may run at once.
+let
+  # Home Manager wires MCP servers through a generated plugin named "hm", so
+  # Claude Code scopes their tools as mcp__plugin_hm_<server>__<tool>. The
+  # unscoped form is included as well so the allowlist keeps working if the
+  # servers are ever configured directly instead of through that plugin.
+  mcpTools = server: "mcp__plugin_hm_${server}__*, mcp__${server}__*";
+in
 {
   pro-dev = {
     description = "Planner and orchestrator. Turns a request into a vault plan, files the GitHub issue, and dispatches at most two workers on disjoint files. Never edits code itself.";
@@ -94,7 +101,7 @@
     claude = {
       model = "opus";
       effort = "high";
-      tools = "Agent(pro-worker, pro-worker-lite), Read, Grep, Glob, Bash, TodoWrite, WebFetch, WebSearch";
+      tools = "Agent(pro-worker, pro-worker-lite), Read, Grep, Glob, Bash, TodoWrite, WebFetch, WebSearch, ${mcpTools "roblox"}, ${mcpTools "firecrawl"}";
       disallowedTools = "Write, Edit, NotebookEdit";
       maxTurns = 60;
     };
@@ -143,7 +150,7 @@
     claude = {
       model = "sonnet";
       effort = "high";
-      tools = "Read, Write, Edit, Bash, Grep, Glob, TodoWrite";
+      tools = "Read, Write, Edit, Bash, Grep, Glob, TodoWrite, ${mcpTools "roblox"}, ${mcpTools "firecrawl"}";
       isolation = "worktree";
       maxTurns = 80;
     };
@@ -192,7 +199,7 @@
     claude = {
       model = "haiku";
       effort = "medium";
-      tools = "Read, Write, Edit, Bash, Grep, Glob, TodoWrite";
+      tools = "Read, Write, Edit, Bash, Grep, Glob, TodoWrite, ${mcpTools "roblox"}, ${mcpTools "firecrawl"}";
       isolation = "worktree";
       maxTurns = 60;
     };

@@ -402,6 +402,8 @@ Renders the shared role definitions into both tools from one source:
 | `pro-worker` | `deepseek-v4.1-flash#medium` | `sonnet`, effort `high`, `isolation: worktree` |
 | `pro-worker-lite` | `deepseek-v4.1-flash#low` | `haiku`, effort `medium`, `isolation: worktree` |
 
+**MCP tools in agent sessions.** Home Manager wires the MCP servers through a generated plugin named `hm`, so Claude Code scopes their tools as `mcp__plugin_hm_<server>__<tool>` — not `mcp__<server>__*`. The role `tools:` allowlists therefore include both the scoped form and the unscoped fallback for Roblox Studio and Firecrawl, which is what makes Studio usable from `ccp` and from dispatched workers. Gmail is deliberately left out of agent sessions; add `mcp__plugin_hm_gmail__*` to a role if you want it there.
+
 It also generates the **pro profile** at `~/.config/opencode-pro/opencode/` (`default_agent = "pro-dev"`, pro model, same MCP/LSP/skills) and mirrors the agent files there, because OpenCode only discovers agents from its own config directory. `opp` launches it with `opencode --standalone`: a shared background service keeps whatever config it started with, which would silently ignore the profile.
 
 ### mcp.nix
