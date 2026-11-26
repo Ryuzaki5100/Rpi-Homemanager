@@ -1,23 +1,63 @@
 # Claude Code (TUI only).
 #
-# Two layers, deliberately:
+# Three layers, deliberately:
 #
-#   ~/.claude/settings.json          always loaded: theme, model, shared skills,
+#   ~/.claude/settings.json          real file (installed at activation), always
+#                                    loaded: theme, model, effort, shared skills,
 #                                    statusline, account-skill sync off
 #   ~/.claude/prodev/settings.json   loaded only by `ccp` (via `prodev claude`):
-#                                    agent, PRODEV_MODE, pro permissions, hooks
+#                                    agent, effort, PRODEV_MODE, hooks
+#   ~/.claude/prodev/worker*.json    headless workers launched by `prodev dispatch`
 #
 # Plain `claude` never sees the pro layer, so nothing pro-dev starts, runs or
 # costs tokens unless the session was launched with `ccp`.
+#
+# settings.json is installed as a *real* file rather than a Nix symlink: Claude
+# persists `/effort`, `/model` and `/config` by writing an atomic temp file next
+# to it, which fails with EACCES inside the read-only /nix/store.
 { config, lib, pkgs, ... }:
 
 let
   prodev = "${config.home.profileDirectory}/bin/prodev";
   jsonFormat = pkgs.formats.json { };
 
+  baseSettings = {
+    "$schema" = "https://json.schemastore.org/claude-code-settings.json";
+    theme = "auto";
+    model = "opus";
+
+    # Settings-level effort is what the main thread honours; an agent's
+    # `effort` frontmatter only governs the subagents it spawns.
+    effortLevel = "high";
+
+    # The only personal skills are the ones Home Manager deploys; don't pull
+    # a second set from the account.
+    syncClaudeAiSkills = false;
+
+    statusLine = {
+      type = "command";
+      command = "${prodev} status --line";
+    };
+
+    permissions = {
+      allow = [
+        "Read"
+        "Grep"
+        "Glob"
+      ];
+      deny = [
+        "Bash(git push:*)"
+        "Bash(rm -rf:*)"
+      ];
+    };
+  };
+
+  settingsFile = jsonFormat.generate "claude-code-settings.json" baseSettings;
+
   # Pro-dev orchestrator session.
   proSettings = {
     agent = "pro-dev";
+    effortLevel = "high";
     env = {
       PRODEV_MODE = "1";
     };
@@ -92,52 +132,35 @@ let
   };
 
   # Headless worker sessions launched by `prodev dispatch`. Edits are
-  # auto-approved; push/reset stay denied.
-  workerSettings = {
-    agent = "pro-worker";
-    env = {
-      PRODEV_MODE = "1";
-      PRODEV_WORKER = "1";
+  # auto-approved; push/reset stay denied. One overlay per instance class so
+  # the lite tier really runs at medium effort.
+  workerSettings =
+    tier: effort:
+    {
+      agent = if tier == "lite" then "pro-worker-lite" else "pro-worker";
+      effortLevel = effort;
+      env = {
+        PRODEV_MODE = "1";
+        PRODEV_WORKER = "1";
+      };
+      permissions = {
+        defaultMode = "acceptEdits";
+        allow = [ "Bash" "Read" "Write" "Edit" "Grep" "Glob" "TodoWrite" ];
+        deny = [
+          "Bash(git push:*)"
+          "Bash(git reset --hard:*)"
+        ];
+      };
     };
-    permissions = {
-      defaultMode = "acceptEdits";
-      allow = [ "Bash" "Read" "Write" "Edit" "Grep" "Glob" "TodoWrite" ];
-      deny = [
-        "Bash(git push:*)"
-        "Bash(git reset --hard:*)"
-      ];
-    };
-  };
 in
 {
   programs.claude-code = {
     enable = true;
 
-    settings = {
-      theme = "auto";
-      model = "opus";
-
-      # The only personal skills are the ones Home Manager deploys; don't pull
-      # a second set from the account.
-      syncClaudeAiSkills = false;
-
-      statusLine = {
-        type = "command";
-        command = "${prodev} status --line";
-      };
-
-      permissions = {
-        allow = [
-          "Read"
-          "Grep"
-          "Glob"
-        ];
-        deny = [
-          "Bash(git push:*)"
-          "Bash(rm -rf:*)"
-        ];
-      };
-    };
+    # Leave the module's settings writer off: that file is a store symlink,
+    # which breaks in-session writes. The activation hook below installs the
+    # generated settings as a normal writable file instead.
+    settings = { };
 
     # Same 29 skills as OpenCode, deployed from the shared skills/ tree.
     skills = ../../skills;
@@ -149,15 +172,23 @@ in
     ".claude/prodev/settings.json".source =
       jsonFormat.generate "claude-prodev-settings.json" proSettings;
     ".claude/prodev/worker.settings.json".source =
-      jsonFormat.generate "claude-prodev-worker.settings.json" workerSettings;
+      jsonFormat.generate "claude-prodev-worker.settings.json" (workerSettings "work" "high");
+    ".claude/prodev/worker-lite.settings.json".source =
+      jsonFormat.generate "claude-prodev-worker-lite.settings.json" (workerSettings "lite" "medium");
   };
 
-  # Earlier hand-written settings are not a Home Manager symlink, which makes
-  # activation refuse to replace them (checkLinkTargets runs before linking).
-  # Move it aside once, keeping the content.
-  home.activation.claudeLegacySettings = lib.hm.dag.entryBefore [ "checkLinkTargets" ] ''
-    if [ -f "$HOME/.claude/settings.json" ] && [ ! -L "$HOME/.claude/settings.json" ]; then
-      $DRY_RUN_CMD mv "$HOME/.claude/settings.json" "$HOME/.claude/settings.json.pre-hm"
+  # Install settings.json as a real file so `/effort`, `/model` and `/config`
+  # can persist. Runs after linking so a stale symlink from an older generation
+  # is gone first; only rewrites when the content actually changed, so a switch
+  # does not churn the mtime needlessly.
+  home.activation.claudeSettings = lib.hm.dag.entryAfter [ "linkGeneration" ] ''
+    target="$HOME/.claude/settings.json"
+    $DRY_RUN_CMD mkdir -p "$HOME/.claude"
+    if [ -L "$target" ]; then
+      $DRY_RUN_CMD rm -f "$target"
+    fi
+    if ! ${pkgs.diffutils}/bin/cmp -s ${settingsFile} "$target"; then
+      $DRY_RUN_CMD ${pkgs.coreutils}/bin/install -m 0644 ${settingsFile} "$target"
     fi
   '';
 }

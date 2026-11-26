@@ -372,12 +372,15 @@ Two settings layers, on purpose:
 
 | File | Loaded by | Holds |
 |---|---|---|
-| `~/.claude/settings.json` | every session | theme, model, shared skills, statusline, account-skill sync off |
-| `~/.claude/prodev/settings.json` | `ccp` only | `agent = "pro-dev"`, `PRODEV_MODE=1`, pro permissions, hooks |
-| `~/.claude/prodev/worker.settings.json` | headless workers | `acceptEdits`, `PRODEV_WORKER=1` |
+| `~/.claude/settings.json` | every session | theme, model, `effortLevel`, shared skills, statusline, account-skill sync off |
+| `~/.claude/prodev/settings.json` | `ccp` only | `agent = "pro-dev"`, `effortLevel = "high"`, `PRODEV_MODE=1`, pro permissions, hooks |
+| `~/.claude/prodev/worker.settings.json` | headless `work` workers | `pro-worker`, `effortLevel = "high"`, `acceptEdits`, `PRODEV_WORKER=1` |
+| `~/.claude/prodev/worker-lite.settings.json` | headless `lite` workers | `pro-worker-lite`, `effortLevel = "medium"` |
 
+- `settings.json` is installed as a **real 0644 file** by `home.activation.claudeSettings`, not a store symlink. Claude persists `/effort`, `/model` and `/config` by writing an atomic temp file next to it, which fails with `EACCES` inside `/nix/store`; the hook removes a stale symlink and rewrites the file only when its content changed. In-session changes therefore stick until the next `home-manager switch`, which re-imposes the declarative values
+- `effortLevel` is the settings key the **main thread** honours; an agent's `effort` frontmatter only governs the subagents it spawns
 - `syncClaudeAiSkills = false`: the only personal skills are the Nix-deployed ones from `skills/`
-- `statusLine` runs `prodev status --line`, so the prompt shows `[pro]` or `[off]`, the project, the vault and the live worker count
+- `statusLine` runs `prodev status --line`, which reads Claude's session JSON and shows agent, model and effort (`[pro] · pro-dev · Opus 5.5 · high · repo · vault:… · workers 0/2`)
 - Hooks live in the pro overlay only, so plain `claude` pays no pro-dev startup cost:
   - `SessionStart` (`startup|resume|clear|compact`) runs `prodev hook session-start`, which injects the vault brief, knowledge map, active plans, leases and issue list as context — this is what survives a compaction
   - `PostCompact` writes a compaction marker into the orchestrator log

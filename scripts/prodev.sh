@@ -383,8 +383,28 @@ cmd_status() {
 	fi
 
 	if [ "$line" -eq 1 ]; then
-		printf '[%s] %s · vault:%s · workers %s/%s · tasks %s/%s\n' \
-			"$mode" "$name" "$(basename "${vault:-none}")" "$workers" "$SLOTS_DEFAULT" "$active" "$backlog"
+		# Claude Code passes the session JSON on stdin. Read it only when stdin
+		# is not a terminal, so `prodev status --line` still works by hand.
+		local payload="" model="" agent="" effort=""
+		if [ ! -t 0 ]; then
+			payload=$(cat 2>/dev/null || true)
+		fi
+		if [ -n "$payload" ]; then
+			model=$(printf '%s' "$payload" | jq -r '.model.display_name // empty' 2>/dev/null || true)
+			agent=$(printf '%s' "$payload" | jq -r '.agent.name // empty' 2>/dev/null || true)
+			effort=$(printf '%s' "$payload" | jq -r '.effort.level // empty' 2>/dev/null || true)
+			# Trust the active agent over the environment: a pro-* agent means
+			# this is a pro-dev session even if PRODEV_MODE did not propagate.
+			case $agent in
+			pro-*) mode="pro" ;;
+			esac
+		fi
+		local detail=""
+		[ -n "$agent" ] && detail="$detail · $agent"
+		[ -n "$model" ] && detail="$detail · $model"
+		[ -n "$effort" ] && detail="$detail · $effort"
+		printf '[%s]%s · %s · vault:%s · workers %s/%s\n' \
+			"$mode" "$detail" "$name" "$(basename "${vault:-none}")" "$workers" "$SLOTS_DEFAULT"
 		return 0
 	fi
 
@@ -605,8 +625,10 @@ not verified, follow-ups."
 		(cd "$wt" && opencode --standalone run --agent "$agent" --title "$id" "$prompt") >>"$log" 2>&1
 		;;
 	claude)
+		local settings="$HOME/.claude/prodev/worker.settings.json"
+		[ "$tier" = "lite" ] && settings="$HOME/.claude/prodev/worker-lite.settings.json"
 		(cd "$wt" && PRODEV_WORKER=1 claude -p --agent "$agent" \
-			--settings "$HOME/.claude/prodev/worker.settings.json" "$prompt") >>"$log" 2>&1
+			--settings "$settings" "$prompt") >>"$log" 2>&1
 		;;
 	*) die "dispatch: unknown tool $tool" ;;
 	esac
