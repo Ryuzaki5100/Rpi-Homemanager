@@ -511,7 +511,7 @@ cmd_task() {
 
 	case $action in
 	new)
-		local title="" tier="work" files="" depends="" goal="" acceptance=""
+		local title="" tier="work" files="" depends="" goal="" acceptance="" push="no"
 		while [ $# -gt 0 ]; do
 			case $1 in
 			--title) title=${2:-}; shift 2 ;;
@@ -520,6 +520,7 @@ cmd_task() {
 			--depends) depends=${2:-}; shift 2 ;;
 			--goal) goal=${2:-}; shift 2 ;;
 			--acceptance) acceptance=${2:-}; shift 2 ;;
+			--push) push="yes"; shift ;;
 			*) die "task new: unknown argument $1" ;;
 			esac
 		done
@@ -531,7 +532,7 @@ cmd_task() {
 		note="$BACKLOG/$id-$slug.md"
 		render "$TEMPLATES/task.md" \
 			"ID=$id" "TITLE=$title" "TIER=$tier" "FILES=$files" \
-			"DEPENDS=$depends" "GITHUB=" "DATE=$(date +%Y-%m-%d)" \
+			"DEPENDS=$depends" "GITHUB=" "PUSH=$push" "DATE=$(date +%Y-%m-%d)" \
 			"GOAL=$goal" "ACCEPTANCE=$acceptance" >"$note"
 		vault_commit "task: add $id"
 		say "$note"
@@ -608,11 +609,16 @@ run_worker() {
 		fi
 	fi
 
+	local push push_policy
+	push=$(fm "$note" push)
+	push_policy="Do not push."
+	[ "$push" = "yes" ] && push_policy="After the checks pass, push this branch to origin (never to the default branch)."
+
 	local prompt
 	prompt="You are pro-worker. Implement exactly one task and report.
 Task note: $note
 Branch: $branch (already checked out in this worktree)
-Commit your work on this branch. Do not push, do not merge, do not edit
+Commit your work on this branch. $push_policy Do not merge, do not edit
 .prodev-vault/**, and do not touch files outside the task's files: list.
 Run the project checks, then print a short report: changed, verified,
 not verified, follow-ups."
@@ -897,25 +903,54 @@ hook_guard_spawn() {
 	: "$payload"
 }
 
+hook_deny() {
+	printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"%s"}}\n' "$1"
+}
+
 hook_guard_bash() {
 	in_mode || return 0
-	is_worker && return 0
-	local payload command
+
+	local payload command agent
 	payload=$(cat)
 	command=$(printf '%s' "$payload" | jq -r '.tool_input.command // empty' 2>/dev/null || true)
+	agent=$(printf '%s' "$payload" | jq -r '.agent_type // empty' 2>/dev/null || true)
 	[ -n "$command" ] || return 0
 
-	local reason=""
-	case $command in
-	*git\ push*) reason="git push is forbidden in pro-dev; the human pushes" ;;
-	*git\ reset\ --hard*) reason="git reset --hard is forbidden in pro-dev" ;;
-	*git\ clean\ -fdx*) reason="git clean -fdx is forbidden in pro-dev" ;;
-	*rm\ -rf*) reason="rm -rf is forbidden in pro-dev" ;;
-	*git\ commit*) reason="the orchestrator does not commit; a worker commits on its branch" ;;
-	esac
+	# Match only at a command position (start, or after a shell separator) so a
+	# log message or commit body that merely mentions a dangerous string is not
+	# blocked.
+	local prefix='(^|[;&|]|\$\()[[:space:]]*'
 
-	[ -n "$reason" ] || return 0
-	printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"%s"}}\n' "$reason"
+	# Destructive commands stay blocked for every role, workers included.
+	if printf '%s' "$command" | grep -Eq "${prefix}(sudo[[:space:]]+)?git[[:space:]]+reset[[:space:]]+--hard"; then
+		hook_deny "git reset --hard is forbidden in pro-dev"
+		return 0
+	fi
+	if printf '%s' "$command" | grep -Eq "${prefix}(sudo[[:space:]]+)?git[[:space:]]+clean[[:space:]]+-[a-zA-Z]*f"; then
+		hook_deny "git clean -fdx is forbidden in pro-dev"
+		return 0
+	fi
+	if printf '%s' "$command" | grep -Eq "${prefix}(sudo[[:space:]]+)?rm[[:space:]]+(-[a-zA-Z]*([rR][a-zA-Z]*f|f[a-zA-Z]*[rR])|-r[[:space:]]+-f|-f[[:space:]]+-r|--recursive)"; then
+		hook_deny "recursive force delete is forbidden in pro-dev"
+		return 0
+	fi
+
+	# Workers may commit (and push, when a task explicitly says so); the
+	# orchestrator delegates both. Headless workers carry PRODEV_WORKER=1
+	# because they run as a main thread with no agent_type.
+	case $agent in
+	pro-worker | pro-worker-lite) return 0 ;;
+	esac
+	is_worker && return 0
+
+	if printf '%s' "$command" | grep -Eq "${prefix}(sudo[[:space:]]+)?git([[:space:]]+-C[[:space:]]+[^[:space:]]+)?[[:space:]]+push"; then
+		hook_deny "the orchestrator does not push; delegate to pro-worker-lite"
+		return 0
+	fi
+	if printf '%s' "$command" | grep -Eq "${prefix}(sudo[[:space:]]+)?git([[:space:]]+-C[[:space:]]+[^[:space:]]+)?[[:space:]]+commit"; then
+		hook_deny "the orchestrator does not commit; delegate to pro-worker-lite"
+		return 0
+	fi
 }
 
 # ---------------------------------------------------------------- doctor

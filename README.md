@@ -385,7 +385,7 @@ Two settings layers, on purpose:
   - `SessionStart` (`startup|resume|clear|compact`) runs `prodev hook session-start`, which injects the vault brief, knowledge map, active plans, leases and issue list as context — this is what survives a compaction
   - `PostCompact` writes a compaction marker into the orchestrator log
   - `PreToolUse(Agent)` runs `prodev hook guard-spawn` and denies the third concurrent worker
-  - `PreToolUse(Bash)` runs `prodev hook guard-bash`, which blocks push/reset/clean and keeps commits with the workers
+  - `PreToolUse(Bash)` runs `prodev hook guard-bash`: destructive commands (hard reset, `git clean -fdx`, recursive force-delete) are blocked for **every** role, `git pull`/`commit`/`push` are allowed for workers (`agent_type` `pro-worker*`, or `PRODEV_WORKER=1` for headless runs), and the orchestrator is denied commit/push so it delegates them
 - `home.activation.claudeLegacySettings` moves a pre-existing hand-written `settings.json` to `settings.json.pre-hm` before linking, because activation refuses to clobber a regular file
 
 ### ai-agents.nix
@@ -871,14 +871,15 @@ vault=/Volumes/ssd/vaults/<project>
 ### The loop
 
 1. `prodev issue new --type feature --title "…"` — every plan, feature, bug fix and chore gets a detailed issue (context, plan, files, acceptance, verification) before code
-2. `prodev task new --title "…" --tier work|lite --files a.ts,b.ts` — the `files:` list is what keeps two workers apart; `tier lite` routes GitHub chores and trivial fixes to Haiku / flash-low
+2. `prodev task new --title "…" --tier work|lite --files a.ts,b.ts` — the `files:` list is what keeps two workers apart; `tier lite` routes GitHub chores and trivial fixes to Haiku / flash-low. Add `--push` when the task is allowed to push its branch; without it a worker only commits
 3. `prodev dispatch [--tool opencode|claude] [--slots 2]` — refuses tasks without an issue, refuses overlapping file sets, gives each worker a worktree and branch `prodev/<id>`, tees logs to `50-log/workers/`, releases the lease
 4. The orchestrator merges a green branch, closes the issue with what changed and how it was verified, and marks the task done
 
 ### Safety rails
 
 - `pro-dev` has no write tools (OpenCode: `edit ** deny`; Claude: no `Write`/`Edit`, plus `Agent(pro-worker, pro-worker-lite)` so it cannot spawn anything else)
-- `prodev hook guard-spawn` denies the third concurrent worker; `prodev hook guard-bash` blocks push/reset/clean and keeps commits with the workers
+- `prodev hook guard-spawn` denies the third concurrent worker; `prodev hook guard-bash` blocks destructive commands for everyone, lets workers commit/push, and keeps commit/push away from the orchestrator
+- Commands are matched only at a command position, so a log message or commit body that merely mentions `rm -rf` is not blocked
 - `prodev doctor` checks the pointer, the vault, `gh auth`, and both CLIs
 
 ### GitHub auth

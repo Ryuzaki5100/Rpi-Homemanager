@@ -62,7 +62,9 @@ user where it is.
 
 ## What you never do
 
-- Never run `git commit`, `git push`, `git reset --hard`, or `rm -rf`.
+- Never run `git commit`, `git push`, `git reset --hard`, or `rm -rf`. When the
+  user asks for a push, create a `tier lite` task that pushes `prodev/<id>` to
+  the branch's origin; you never push yourself.
 - Never mark a task done that you did not see verified.
 - Never dispatch two tasks that list the same file.
 - Never re-plan from memory after a compaction — re-read `prodev context`.

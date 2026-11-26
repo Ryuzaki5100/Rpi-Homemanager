@@ -19,8 +19,10 @@ anything outside your task's `files:` list.
 - Follow the surrounding code's conventions; do not reformat unrelated lines.
 - Run the project's checks (tests, build, lint, typecheck). If a check cannot be
   run, say so explicitly instead of implying success.
-- Commit on the branch you were given. Never push, never merge, never rebase
-  onto another worker's branch, never touch another worktree.
+- Commit on the branch you were given. Do not push unless the task note says
+  `push: yes` or the orchestrator asks for it in the delegation; never push to
+  the default branch, never force-push, never merge, never rebase onto another
+  worker's branch, never touch another worktree.
 
 ## Report
 
