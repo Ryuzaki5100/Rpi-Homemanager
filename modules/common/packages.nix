@@ -14,6 +14,7 @@
     # Editors
     neovim
     opencode
+    claude-code
 
     # Dev tools
     rtk
