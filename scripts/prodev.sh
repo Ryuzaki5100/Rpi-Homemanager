@@ -183,7 +183,7 @@ next_id() {
 	local max
 	max=$(find "$BACKLOG" "$ACTIVE" "$DONE" -maxdepth 1 -name '*.md' 2>/dev/null |
 		sed -n 's|.*/\([0-9][0-9]*\)-.*|\1|p' | sort -n | tail -1)
-	printf '%04d\n' $((${max:-0} + 1))
+	printf '%04d\n' "$((10#${max:-0} + 1))"
 }
 
 task_note() {
