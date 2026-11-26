@@ -19,6 +19,7 @@
     # Dev tools
     rtk
     lazygit
+    gh
     tmux
     zellij
     fzf

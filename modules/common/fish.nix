@@ -58,6 +58,36 @@
         '';
       };
 
+      # Pro-dev orchestration mode for OpenCode: a second generated config
+      # profile whose default agent is `pro-dev` (planner/orchestrator).
+      # XDG_CONFIG_HOME only redirects the config dir — auth, sessions and
+      # state stay shared with the normal profile.
+      opp = {
+        description = "OpenCode in pro-dev mode (orchestrator/planner)";
+        body = ''
+          set -lx XDG_CONFIG_HOME "$HOME/.config/opencode-pro"
+          # --standalone: a shared background service would keep the config it
+          # was started with, silently ignoring the pro profile.
+          opencode --standalone $argv
+        '';
+      };
+
+      opn = {
+        description = "OpenCode in normal mode (explicit)";
+        body = ''
+          opencode $argv
+        '';
+      };
+
+      # Claude Code in pro-dev mode. Plain `claude` stays normal: the pro
+      # overlay (agent, hooks, permissions) is only loaded here.
+      ccp = {
+        description = "Claude Code TUI in pro-dev mode";
+        body = ''
+          prodev claude $argv
+        '';
+      };
+
       generate-ssh-key = {
         body = ''
           read -P "Enter your email: " email
@@ -107,5 +137,8 @@
   xdg.configFile = {
     "fish/completions/op.fish".text = "complete -c op -w opencode\n";
     "fish/completions/oprtk.fish".text = "complete -c oprtk -w opencode\n";
+    "fish/completions/opp.fish".text = "complete -c opp -w opencode\n";
+    "fish/completions/opn.fish".text = "complete -c opn -w opencode\n";
+    "fish/completions/ccp.fish".text = "complete -c ccp -w claude\n";
   };
 }

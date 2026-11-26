@@ -50,21 +50,6 @@ in {
   ];
 
   programs.opencode.settings = {
-    # Studio MCP server. Requires Roblox Studio to be open with
-    # Assistant -> ... -> Manage MCP Servers -> "Enable Studio as MCP server".
-    mcp.servers.roblox = {
-      type = "local";
-      command = [ "roblox-studio-mcp" ];
-      codemode = true;
-      # Studio enumerates ~25 tools on startup, and mesh/playtest jobs run for
-      # minutes. The 5s default is too tight on both ends.
-      timeout = {
-        startup = 60000;
-        catalog = 120000;
-        execution = 300000;
-      };
-    };
-
     lsp.luau-lsp = {
       command = [ "luau-lsp-roblox" ];
       extensions = [ ".luau" ".lua" ];

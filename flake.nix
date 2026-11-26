@@ -87,6 +87,7 @@
                 gmail-mcp-auth = prev.callPackage ./pkgs/gmail-mcp-auth.nix { };
                 bitchat-cli = prev.callPackage ./pkgs/bitchat-cli.nix { };
                 archify = prev.callPackage ./pkgs/archify.nix { };
+                prodev = prev.callPackage ./pkgs/prodev.nix { };
                 learnharness = prev.callPackage ./pkgs/learnharness.nix { };
                 lhtui = learnharness-tui.packages.${system}.default;
                 retrocrt = prev.callPackage ./pkgs/retrocrt.nix { };
@@ -172,6 +173,7 @@
             gmail-mcp-auth
             bitchat-cli
             archify
+            prodev
             learnharness
             lhtui
             retrocrt

@@ -1,13 +1,7 @@
-{ config, pkgs, ... }:
+# Firecrawl MCP server: npx needs Node, and the server itself is defined once
+# in ai/mcp.nix (modules/common/mcp.nix renders it for both tools).
+{ pkgs, ... }:
 
 {
   home.packages = [ pkgs.nodejs ];
-
-  programs.opencode.settings.mcp.servers.firecrawl = {
-    type = "local";
-    command = [ "npx" "-y" "firecrawl-mcp@3.23.8" ];
-    environment = {
-      FIRECRAWL_API_KEY = "{file:${config.home.homeDirectory}/.config/firecrawl/api-key}";
-    };
-  };
 }

@@ -17,6 +17,9 @@ Personal Home Manager configuration for a terminal-centric workflow, shared acro
   - [env.nix](#envnix)
   - [fish.nix](#fishnix)
   - [opencode.nix](#opencodenix)
+  - [claude-code.nix](#claude-codenix)
+  - [ai-agents.nix](#ai-agentsnix)
+  - [mcp.nix](#mcpnix)
   - [packages.nix](#packagesnix)
   - [gmail-mcp.nix](#gmail-mcpnix)
   - [firecrawl.nix](#firecrawlnix)
@@ -31,8 +34,10 @@ Personal Home Manager configuration for a terminal-centric workflow, shared acro
   - [retrocrt.nix](#retrocrtnix)
   - [learnharness.nix](#learnharnessnix)
 - [Skills](#skills)
+- [Pro-dev mode](#pro-dev-mode)
 - [Custom Packages](#custom-packages)
   - [nixvim-editor](#nixvim-editor)
+  - [prodev](#prodev)
   - [dripfetch](#dripfetch)
   - [archify](#archify)
   - [bitchat-cli](#bitchat-cli)
@@ -133,9 +138,19 @@ dotfiles/
 ├── flake.nix              # Flake entry point, inputs, outputs
 ├── flake.lock             # Locked dependency revisions
 ├── home.nix               # Top-level Home Manager module
+├── ai/                    # Shared agent tooling, rendered for OpenCode and Claude Code
+│   ├── roles.nix           # pro-dev / pro-worker / pro-worker-lite metadata
+│   ├── roles/              # Prompt bodies, used verbatim by both tools
+│   ├── lib.nix             # Renderers: OpenCode agent md, Claude agent md
+│   ├── mcp.nix             # One MCP definition per server, both shapes
+│   ├── commands/prodev.md  # /prodev slash command
+│   └── templates/          # issue, task, plan, ADR, log
 ├── modules/
 │   ├── default.nix         # Platform aggregator (common + host layer)
 │   ├── common/             # Builds on every platform
+│   │   ├── ai-agents.nix       # Renders ai/ roles into both tools + OpenCode pro profile
+│   │   ├── claude-code.nix     # Claude Code TUI, shared skills, pro overlay & hooks
+│   │   ├── mcp.nix             # Renders ai/mcp.nix for OpenCode and Claude Code
 │   │   ├── core.nix            # User identity, $HOME-driven home dir, state version
 │   │   ├── env.nix            # Session environment variables
 │   │   ├── epub.nix           # EPUB build tooling (epubcheck, fonts, python, fontconfig)
@@ -179,6 +194,7 @@ dotfiles/
 │   ├── learnharness.nix   # LearnHarness v0.7.0 standalone server, .app and skill payload
 │   ├── nixvim-editor.nix  # Thin wrapper around external Nixvim flake
 │   ├── obsitui.nix        # Obsidian TUI from source (npm)
+│   ├── prodev.nix         # Wrapper for scripts/prodev.sh + ai/templates
 │   └── retrocrt.nix       # Wrapper pinning ffmpeg, Pillow and the timestamp font
 ├── scripts/
 │   ├── add-subtitles.sh        # Embed an .srt into a video as a soft subtitle track
@@ -192,6 +208,7 @@ dotfiles/
 │   ├── init-setup-samba       # Samba setup (home, hdd, and ssd shares + recycle bin)
 │   ├── opencode-gateway.py    # HTTP gateway proxy to opencode serve
 │   ├── opencode-serve.sh      # Launch opencode serve and expose on tailnet
+│   ├── prodev.sh              # pro-dev CLI: vault, task queue, dispatch, issues, hooks
 │   ├── download-vid.sh        # Download 4K video with yt-dlp and ffmpeg
 │   ├── epub-preprocess.py     # Preprocess markdown (links, HTML tags, diagram fences) for pandoc
 │   ├── retrocrt.py            # CRT/VHS video styliser (curved bezel, scanlines, timestamp)
@@ -311,12 +328,15 @@ Configures Fish as the login shell.
 | Function | Description |
 |---|---|
 | `op` | Shorthand for `opencode`. Passes all arguments through unchanged. |
+| `opn` | Explicit normal-mode `opencode` (same as `op`). |
+| `opp` | `opencode --standalone` with `XDG_CONFIG_HOME=~/.config/opencode-pro`, i.e. pro-dev mode (`default_agent = "pro-dev"`). `--standalone` matters: a shared background service would keep the config it was started with. |
 | `oprtk` | Shorthand for `opencode` with RTK token compression enabled for that session (sets `RTK_DISABLED=0`, overriding the global default of `1`). |
+| `ccp` | `prodev claude` — Claude Code TUI in pro-dev mode (pro settings overlay, `--agent pro-dev`). Plain `claude` stays normal. |
 | `generate-ssh-key` | Prompts for an email and generates an Ed25519 SSH key (`ssh-keygen -t ed25519 -C "<email>"`) |
 | `rebuild-nixos` | Rebuilds the NixOS system from `~/rpi-nixos` via `nixos-rebuild switch --flake`. Gracefully errors if not on NixOS or the flake directory is missing. |
 | `update-nixos` | Updates the flake lock for `~/rpi-nixos`. Harmless on non-NixOS hosts. |
 
-`op` and `oprtk` shadow a user completion file (`~/.config/fish/completions/op.fish` / `oprtk.fish`) over Fish's embedded `op` completion, which would otherwise invoke the real `op` binary during tab completion.
+`op`, `opn` and `opp` shadow user completion files (`~/.config/fish/completions/op.fish`, `opn.fish`, `opp.fish`) over Fish's embedded `op` completion, which would otherwise invoke the real `op` binary during tab completion. `ccp` has its own wrapper completion.
 
 ### opencode.nix
 
@@ -325,11 +345,12 @@ Configures [OpenCode](https://opencode.ai) — an AI coding assistant — via `p
 **Model:** Default model set to `opencode/deepseek-v4-flash-free`.
 
 **MCP server configuration:**
-- Servers live under `mcp.servers.<name>` (OpenCode 2 schema). The older flat `mcp.<name>` form is deprecated; `programs.opencode.validateFiles.config = true` validates the generated `opencode.json` against the schema shipped in the `opencode` package, so a drifted shape fails the build instead of silently disconnecting a server
-- Defines a Gmail MCP server using `mcp-google-gmail` with paths to OAuth credentials and token. It is **enabled by default** — set `programs.opencode.settings.mcp.servers.gmail.disabled = true` to disable it
-- Launches via `uv run --no-project --with "mcp-google-gmail" --with "mcp>=1.8.0,<2" mcp-google-gmail`, pinning `mcp<2` because `mcp-google-gmail` requires the `fastmcp` module that was removed in `mcp` 2.0.0
-- Defines a Firecrawl MCP server (`firecrawl-mcp`, **enabled**, keyed on `~/.config/firecrawl/api-key`) — see [`firecrawl.nix`](#firecrawlnix)
-- On macOS, [`roblox.nix`](#robloxnix) adds a `roblox` server that runs Roblox Studio's bundled MCP server through the `roblox-studio-mcp` wrapper
+- Servers are defined once in [`ai/mcp.nix`](ai/mcp.nix) and rendered for both tools by [`mcp.nix`](#mcpnix). They live under `mcp.servers.<name>` (OpenCode 2 schema); the older flat `mcp.<name>` form is deprecated, and `programs.opencode.validateFiles.config = true` validates the generated `opencode.json` against the schema shipped in the `opencode` package, so a drifted shape fails the build instead of silently disconnecting a server
+- Gmail uses `mcp-google-gmail` with paths to OAuth credentials and token, via `uv run --no-project --with "mcp-google-gmail" --with "mcp>=1.8.0,<2"` (pinned because `mcp-google-gmail` needs the `fastmcp` module removed in `mcp` 2.0.0)
+- Firecrawl uses `firecrawl-mcp@3.23.8`, keyed on `~/.config/firecrawl/api-key`
+- On macOS, `roblox` runs Roblox Studio's bundled MCP server through the `roblox-studio-mcp` wrapper, with `codemode` and the long startup/catalog/execution timeouts Studio needs
+
+**Agents:** the pro-dev roles (`pro-dev`, `pro-worker`, `pro-worker-lite`) are rendered from [`ai/roles.nix`](ai/roles.nix) by [`ai-agents.nix`](#ai-agentsnix) into `~/.config/opencode/agents/`. They also appear in the `opencode-pro` profile, which is what `opp` launches.
 
 **Skill deployment:**
 - Automatically discovers subdirectories under `skills/` and symlinks **every file** inside each into `~/.config/opencode/skills/<name>/`, preserving the relative layout (so a router `SKILL.md` can route to `GUIDE.md`, `references/*.md`, `templates/`, and `scripts/` from its deployed base directory)
@@ -342,6 +363,52 @@ Configures [OpenCode](https://opencode.ai) — an AI coding assistant — via `p
 - The plugin rewrites shell commands through `rtk hook opencode` to cut token usage; all rewrite and permission logic lives upstream in rtk
 - Disabled by default via `RTK_DISABLED=1` (see [`env.nix`](#envnix)); run `oprtk` instead of `op` to enable it for a single session
 - [`scripts/sync-rtk-plugin.sh`](scripts/sync-rtk-plugin.sh) re-vendors `modules/common/rtk-opencode.ts` from the upstream tag matching the `rtk` version in the locked nixpkgs, and is run automatically by `update-home-manager` and `rebuild-home-manager`. It refuses rtk versions below `0.52.0` (the first with OpenCode 2 plugin support)
+
+### claude-code.nix
+
+Wires Anthropic's Claude Code CLI through `programs.claude-code`. Only the **TUI** is configured; the desktop app and VS Code extension are left alone.
+
+Two settings layers, on purpose:
+
+| File | Loaded by | Holds |
+|---|---|---|
+| `~/.claude/settings.json` | every session | theme, model, shared skills, statusline, account-skill sync off |
+| `~/.claude/prodev/settings.json` | `ccp` only | `agent = "pro-dev"`, `PRODEV_MODE=1`, pro permissions, hooks |
+| `~/.claude/prodev/worker.settings.json` | headless workers | `acceptEdits`, `PRODEV_WORKER=1` |
+
+- `syncClaudeAiSkills = false`: the only personal skills are the Nix-deployed ones from `skills/`
+- `statusLine` runs `prodev status --line`, so the prompt shows `[pro]` or `[off]`, the project, the vault and the live worker count
+- Hooks live in the pro overlay only, so plain `claude` pays no pro-dev startup cost:
+  - `SessionStart` (`startup|resume|clear|compact`) runs `prodev hook session-start`, which injects the vault brief, knowledge map, active plans, leases and issue list as context — this is what survives a compaction
+  - `PostCompact` writes a compaction marker into the orchestrator log
+  - `PreToolUse(Agent)` runs `prodev hook guard-spawn` and denies the third concurrent worker
+  - `PreToolUse(Bash)` runs `prodev hook guard-bash`, which blocks push/reset/clean and keeps commits with the workers
+- `home.activation.claudeLegacySettings` moves a pre-existing hand-written `settings.json` to `settings.json.pre-hm` before linking, because activation refuses to clobber a regular file
+
+### ai-agents.nix
+
+Renders the shared role definitions into both tools from one source:
+
+- [`ai/roles.nix`](ai/roles.nix) — role metadata: per-tool model, effort, mode, tool and permission policy
+- `ai/roles/*.md` — the prompt bodies, used verbatim by both tools
+- [`ai/lib.nix`](ai/lib.nix) — `opencodeAgent` (list-form `permissions`, `model#variant`) and `claudeAgent` (camelCase frontmatter, `tools`, `effort`, `isolation`)
+
+| Role | OpenCode | Claude Code |
+|---|---|---|
+| `pro-dev` | `deepseek-v4-pro#high` | `opus`, effort `high`, `Agent(pro-worker, pro-worker-lite)` allowlist, no write tools |
+| `pro-worker` | `deepseek-v4.1-flash#medium` | `sonnet`, effort `high`, `isolation: worktree` |
+| `pro-worker-lite` | `deepseek-v4.1-flash#low` | `haiku`, effort `medium`, `isolation: worktree` |
+
+It also generates the **pro profile** at `~/.config/opencode-pro/opencode/` (`default_agent = "pro-dev"`, pro model, same MCP/LSP/skills) and mirrors the agent files there, because OpenCode only discovers agents from its own config directory. `opp` launches it with `opencode --standalone`: a shared background service keeps whatever config it started with, which would silently ignore the profile.
+
+### mcp.nix
+
+One definition per MCP server in [`ai/mcp.nix`](ai/mcp.nix), rendered into both shapes by [`modules/common/mcp.nix`](modules/common/mcp.nix):
+
+- OpenCode: `mcp.servers.<name>`, `type = "local"`, argv, `environment`, plus its extras (`codemode`, object `timeout`)
+- Claude Code: `mcpServers.<name>`, `type = "stdio"`, `command`/`args`/`env`
+- File-backed secrets differ: OpenCode understands `{file:…}`, Claude Code does not, so Firecrawl gets a runtime wrapper that reads the key before exec
+- Roblox Studio's MCP server is shared too, gated on Darwin
 
 ### packages.nix
 
@@ -766,6 +833,49 @@ The wobble/displacement, bloom, grain and lens stages run per pixel and dominate
 
 OpenCode skills are stored in `skills/` and auto-deployed to `~/.config/opencode/skills/<name>/` by the [`opencode.nix`](#opencodenix) module — every file in a skill directory is symlinked recursively, so a lean router `SKILL.md` can route to on-demand companions (`GUIDE.md`, `references/*.md`, `templates/`, `scripts/`) without bloating the always-loaded context.
 
+The same tree is deployed to `~/.claude/skills/` by [`claude-code.nix`](#claude-codenix). `SKILL.md` is the agentskills.io format both tools implement, so nothing is duplicated: run `/update-docs`, `/job-grabber`, … in Claude Code, or ask for the skill by name in OpenCode.
+
+## Pro-dev mode
+
+An optional working mode where a planner/orchestrator delegates to at most two workers. Off by default and explicit per launch:
+
+| Launch | Tool | Mode |
+|---|---|---|
+| `ccp` | Claude Code TUI | pro-dev: `opus`, effort high, orchestrator prompt, vault hooks |
+| `claude` | Claude Code TUI | normal: no pro-dev code path at all |
+| `opp` | OpenCode | pro-dev: second config profile, `default_agent = pro-dev`, `deepseek-v4-pro#high` |
+| `op` / `opn` | OpenCode | normal |
+
+### The vault
+
+Each project names its own vault; there is no global default.
+
+```ini
+# <repo>/.prodev  (committed)
+vault=.prodev-vault
+slots=2
+
+# <repo>/.prodev.local  (gitignored)
+vault=/Volumes/ssd/vaults/<project>
+```
+
+- Relative paths resolve from the **main checkout root** (`git rev-parse --git-common-dir`), so workers in `.prodev/worktrees/*` still find it
+- `prodev init` writes the pointer, adds the ignore entries, scaffolds `00-brief/ 10-knowledge/ 20-plans/ 40-tasks/ 50-log/ 90-decisions/` and git-inits the vault
+- `prodev context` prints the brief, knowledge map, active plans, leases and open issues — the rehydration pack for a fresh or compacted session
+
+### The loop
+
+1. `prodev issue new --type feature --title "…"` — every plan, feature, bug fix and chore gets a detailed issue (context, plan, files, acceptance, verification) before code
+2. `prodev task new --title "…" --tier work|lite --files a.ts,b.ts` — the `files:` list is what keeps two workers apart; `tier lite` routes GitHub chores and trivial fixes to Haiku / flash-low
+3. `prodev dispatch [--tool opencode|claude] [--slots 2]` — refuses tasks without an issue, refuses overlapping file sets, gives each worker a worktree and branch `prodev/<id>`, tees logs to `50-log/workers/`, releases the lease
+4. The orchestrator merges a green branch, closes the issue with what changed and how it was verified, and marks the task done
+
+### Safety rails
+
+- `pro-dev` has no write tools (OpenCode: `edit ** deny`; Claude: no `Write`/`Edit`, plus `Agent(pro-worker, pro-worker-lite)` so it cannot spawn anything else)
+- `prodev hook guard-spawn` denies the third concurrent worker; `prodev hook guard-bash` blocks push/reset/clean and keeps commits with the workers
+- `prodev doctor` checks the pointer, the vault, `gh auth`, and both CLIs
+
 ### learnharness
 
 Reads the local learning record — teaching and practice sessions, learner answers, confidence, thinking, practice submissions, propositions and reasoning chains — through the bundled read-only Python readers. Vendored from the app derivation with a short "Local setup (dotfiles)" section that points at `LH_DATA_DIR`; the same path is used by [`lhtui`](#lhtui) and the server. It never writes to the record.
@@ -875,6 +985,23 @@ nix run github:Ryuzaki5100/nixvim --refresh -- "$@"
 ```
 
 Used as the system `EDITOR` and referenced by Basalt keybindings for opening notes.
+
+### prodev
+
+`pkgs/prodev.nix` wraps [`scripts/prodev.sh`](scripts/prodev.sh) with the tools it shells out to (`git`, `gh`, `jq`, GNU sed/awk, coreutils) and a store copy of `ai/templates/`. One CLI for the human, the orchestrator and the workers:
+
+| Command | Purpose |
+|---|---|
+| `init` / `vault link` | write `.prodev`, scaffold and git-init the vault |
+| `status [--line]` | vault, task counts, live leases (also the Claude statusline) |
+| `context` | rehydration pack after a fresh session or a compaction |
+| `task new\|claim\|done` | queue with leases; one note per task |
+| `dispatch` | claim up to 2 disjoint tasks, worktree per task, tee logs |
+| `issue new\|close\|check` | the issue-first workflow, from `ai/templates/issue.md` |
+| `log` | append an orchestrator/worker log note |
+| `claude` | preflight + `exec claude` with the pro overlay (used by `ccp`) |
+| `hook session-start\|post-compact\|guard-spawn\|guard-bash` | Claude Code hooks |
+| `doctor` | pointer, vault, `gh auth`, tooling |
 
 ### dripfetch
 

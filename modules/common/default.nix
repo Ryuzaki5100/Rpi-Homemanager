@@ -10,6 +10,9 @@
     ./fish.nix
     ./packages.nix
     ./opencode.nix
+    ./claude-code.nix
+    ./ai-agents.nix
+    ./mcp.nix
     ./pebble.nix
     ./gmail-mcp.nix
     ./firecrawl.nix

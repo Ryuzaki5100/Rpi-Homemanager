@@ -40,14 +40,6 @@ in {
 
     settings = {
       model = "opencode/deepseek-v4-flash-free";
-      mcp.servers.gmail = {
-        type = "local";
-        command = [ "uv" "run" "--no-project" "--with" "mcp-google-gmail" "--with" "mcp>=1.8.0,<2" "mcp-google-gmail" ];
-        environment = {
-          GMAIL_CREDENTIALS_PATH = "${config.home.homeDirectory}/.config/gmail-mcp/credentials.json";
-          GMAIL_TOKEN_PATH = "${config.home.homeDirectory}/.config/gmail-mcp/token.json";
-        };
-      };
     };
   };
 
