@@ -3,6 +3,7 @@ id: {{ID}}
 title: {{TITLE}}
 status: backlog
 tier: {{TIER}}
+effort: {{EFFORT}}
 agent: pro-worker
 github: {{GITHUB}}
 push: {{PUSH}}

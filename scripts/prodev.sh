@@ -25,6 +25,8 @@ prodev — plan, file, dispatch, verify
   status [--line|--quiet]             vault, task counts, live leases
   context [--max-chars N]             rehydration pack for a fresh/compacted session
   task new --title T [options]        create a backlog note
+                                      (--tier work|lite, --effort medium|high,
+                                       --files a,b, --push)
   task claim <id>                     take the lease for a task
   task done <id> [--report-file F]     move to done, release the lease
   dispatch [--tool opencode|claude] [--slots N] [--dry-run]
@@ -521,7 +523,7 @@ cmd_task() {
 
 	case $action in
 	new)
-		local title="" tier="work" files="" depends="" goal="" acceptance="" push="no"
+		local title="" tier="work" files="" depends="" goal="" acceptance="" push="no" effort="medium"
 		while [ $# -gt 0 ]; do
 			case $1 in
 			--title) title=${2:-}; shift 2 ;;
@@ -531,17 +533,21 @@ cmd_task() {
 			--goal) goal=${2:-}; shift 2 ;;
 			--acceptance) acceptance=${2:-}; shift 2 ;;
 			--push) push="yes"; shift ;;
+			--effort) effort=${2:-}; shift 2 ;;
 			*) die "task new: unknown argument $1" ;;
 			esac
 		done
 		[ -n "$title" ] || die "task new: --title is required"
 		[ "$tier" = "work" ] || [ "$tier" = "lite" ] || die "task new: --tier must be work or lite"
+		[ "$effort" = "medium" ] || [ "$effort" = "high" ] || die "task new: --effort must be medium or high"
+		# A lite task runs on Haiku, which never escalates.
+		[ "$tier" = "lite" ] && effort="medium"
 		local id slug note
 		id=$(next_id)
 		slug=$(slugify "$title")
 		note="$BACKLOG/$id-$slug.md"
 		render "$TEMPLATES/task.md" \
-			"ID=$id" "TITLE=$title" "TIER=$tier" "FILES=$files" \
+			"ID=$id" "TITLE=$title" "TIER=$tier" "EFFORT=$effort" "FILES=$files" \
 			"DEPENDS=$depends" "GITHUB=" "PUSH=$push" "DATE=$(date +%Y-%m-%d)" \
 			"GOAL=$goal" "ACCEPTANCE=$acceptance" >"$note"
 		vault_commit "task: add $id"
@@ -602,11 +608,28 @@ paths_overlap() {
 	return 1
 }
 
+# resolve_worker <tier> <note> -> "agent overlay effort"
+#   lite                     -> pro-worker-lite  worker-lite  medium
+#   work + effort: high      -> pro-worker-deep  worker-deep  high
+#   work (default)           -> pro-worker       worker       medium
+resolve_worker() {
+	local tier=$1 note=$2 effort
+	effort=$(fm "$note" effort 2>/dev/null || true)
+	[ -n "$effort" ] || effort="medium"
+	[ "$tier" = "lite" ] && effort="medium"
+	if [ "$tier" = "lite" ]; then
+		printf 'pro-worker-lite worker-lite medium\n'
+	elif [ "$effort" = "high" ]; then
+		printf 'pro-worker-deep worker-deep high\n'
+	else
+		printf 'pro-worker worker medium\n'
+	fi
+}
+
 run_worker() {
 	local note=$1 id=$2 tier=$3 tool=$4 repo=$5 log=$6
-	local agent="pro-worker"
-	[ "$tier" = "lite" ] && agent="pro-worker-lite"
-	[ "$tool" = "claude" ] && [ "$tier" = "lite" ] && agent="pro-worker-lite"
+	local class overlay effort
+	read -r class overlay effort <<<"$(resolve_worker "$tier" "$note")"
 
 	local wt="$repo/.prodev/worktrees/wt-$id"
 	local branch="prodev/$id"
@@ -633,18 +656,17 @@ Commit your work on this branch. $push_policy Do not merge, do not edit
 Run the project checks, then print a short report: changed, verified,
 not verified, follow-ups."
 
-	printf '# worker log — %s\n\n- tool: %s\n- agent: %s\n- worktree: %s\n\n' \
-		"$id" "$tool" "$agent" "$wt" >"$log"
+	printf '# worker log — %s\n\n- tool: %s\n- agent: %s\n- effort: %s\n- worktree: %s\n\n' \
+		"$id" "$tool" "$class" "$effort" "$wt" >"$log"
 
 	case $tool in
 	opencode)
-		(cd "$wt" && opencode --standalone run --agent "$agent" --title "$id" "$prompt") >>"$log" 2>&1
+		(cd "$wt" && opencode --standalone run --agent "$class" --title "$id" "$prompt") >>"$log" 2>&1
 		;;
 	claude)
-		local settings="$HOME/.claude/prodev/worker.settings.json"
-		[ "$tier" = "lite" ] && settings="$HOME/.claude/prodev/worker-lite.settings.json"
-		(cd "$wt" && PRODEV_WORKER=1 claude -p --agent "$agent" \
-			--settings "$settings" "$prompt") >>"$log" 2>&1
+		(cd "$wt" && PRODEV_WORKER=1 claude -p --agent "$class" \
+			--settings "$HOME/.claude/prodev/$overlay.settings.json" \
+			--effort "$effort" "$prompt") >>"$log" 2>&1
 		;;
 	*) die "dispatch: unknown tool $tool" ;;
 	esac
@@ -702,9 +724,10 @@ cmd_dispatch() {
 	fi
 
 	if [ "$dry" -eq 1 ]; then
-		local i
+		local i class overlay effort
 		for i in "${!picked[@]}"; do
-			say "would run: ${ids[$i]} (tier=$(fm "${picked[$i]}" tier), files=${sets[$i]})"
+			read -r class overlay effort <<<"$(resolve_worker "$(fm "${picked[$i]}" tier)" "${picked[$i]}")"
+			say "would run: ${ids[$i]} (tier=$(fm "${picked[$i]}" tier), effort=$effort, agent=$class, files=${sets[$i]})"
 		done
 		return 0
 	fi

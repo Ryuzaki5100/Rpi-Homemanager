@@ -42,6 +42,11 @@ in
           effect = "allow";
         }
         {
+          action = "subagent";
+          resource = "pro-worker-deep";
+          effect = "allow";
+        }
+        {
           action = "edit";
           resource = "**";
           effect = "deny";
@@ -101,7 +106,7 @@ in
     claude = {
       model = "opus";
       effort = "high";
-      tools = "Agent(pro-worker, pro-worker-lite), Read, Grep, Glob, Bash, TodoWrite, WebFetch, WebSearch, ${mcpTools "roblox"}, ${mcpTools "firecrawl"}";
+      tools = "Agent(pro-worker, pro-worker-lite, pro-worker-deep), Read, Grep, Glob, Bash, TodoWrite, WebFetch, WebSearch, ${mcpTools "roblox"}, ${mcpTools "firecrawl"}";
       disallowedTools = "Write, Edit, NotebookEdit";
       maxTurns = 60;
     };
@@ -114,6 +119,55 @@ in
       mode = "subagent";
       model = "opencode-go/deepseek-v4.1-flash#medium";
       color = "#8fb3a8";
+      permissions = [
+        {
+          action = "edit";
+          resource = "**";
+          effect = "allow";
+        }
+        {
+          action = "edit";
+          resource = "**/.prodev-vault/**";
+          effect = "deny";
+        }
+        {
+          action = "shell";
+          resource = "*";
+          effect = "allow";
+        }
+        {
+          action = "shell";
+          resource = "git push*";
+          effect = "deny";
+        }
+        {
+          action = "shell";
+          resource = "git reset --hard*";
+          effect = "deny";
+        }
+        {
+          action = "shell";
+          resource = "git clean -fdx*";
+          effect = "deny";
+        }
+      ];
+    };
+    claude = {
+      model = "sonnet";
+      effort = "medium";
+      tools = "Read, Write, Edit, Bash, Grep, Glob, TodoWrite, ${mcpTools "roblox"}, ${mcpTools "firecrawl"}";
+      isolation = "worktree";
+      maxTurns = 80;
+    };
+  };
+
+  pro-worker-deep = {
+    description = "Escalation worker: the same contract as pro-worker at high effort, for genuinely hard work (concurrency, performance, tricky debugging). Not for routine tasks.";
+    body = ./roles/pro-worker.md;
+    opencode = {
+      mode = "subagent";
+      model = "opencode-go/deepseek-v4.1-flash#high";
+      color = "#6f93a8";
       permissions = [
         {
           action = "edit";

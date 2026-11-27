@@ -376,6 +376,7 @@ Two settings layers, on purpose:
 | `~/.claude/prodev/settings.json` | `ccp` only | `agent = "pro-dev"`, `effortLevel = "high"`, `PRODEV_MODE=1`, pro permissions, hooks |
 | `~/.claude/prodev/worker.settings.json` | headless `work` workers | `pro-worker`, `effortLevel = "high"`, `acceptEdits`, `PRODEV_WORKER=1` |
 | `~/.claude/prodev/worker-lite.settings.json` | headless `lite` workers | `pro-worker-lite`, `effortLevel = "medium"` |
+| `~/.claude/prodev/worker-deep.settings.json` | headless `high`-effort workers | `pro-worker-deep`, `effortLevel = "high"` |
 
 - `settings.json` is installed as a **real 0644 file** by `home.activation.claudeSettings`, not a store symlink. Claude persists `/effort`, `/model` and `/config` by writing an atomic temp file next to it, which fails with `EACCES` inside `/nix/store`; the hook removes a stale symlink and rewrites the file only when its content changed. In-session changes therefore stick until the next `home-manager switch`, which re-imposes the declarative values
 - `effortLevel` is the settings key the **main thread** honours; an agent's `effort` frontmatter only governs the subagents it spawns
@@ -399,7 +400,8 @@ Renders the shared role definitions into both tools from one source:
 | Role | OpenCode | Claude Code |
 |---|---|---|
 | `pro-dev` | `deepseek-v4-pro#high` | `opus`, effort `high`, `Agent(pro-worker, pro-worker-lite)` allowlist, no write tools |
-| `pro-worker` | `deepseek-v4.1-flash#medium` | `sonnet`, effort `high`, `isolation: worktree` |
+| `pro-worker` | `deepseek-v4.1-flash#medium` | `sonnet`, effort `medium`, `isolation: worktree` |
+| `pro-worker-deep` | `deepseek-v4.1-flash#high` | `sonnet`, effort `high`, `isolation: worktree` — escalation only |
 | `pro-worker-lite` | `deepseek-v4.1-flash#low` | `haiku`, effort `medium` (runs in the main checkout, so it can drive Studio) |
 
 **MCP tools in agent sessions.** Home Manager wires the MCP servers through a generated plugin named `hm`, so Claude Code scopes their tools as `mcp__plugin_hm_<server>__<tool>` — not `mcp__<server>__*`. The role `tools:` allowlists therefore include both the scoped form and the unscoped fallback for Roblox Studio and Firecrawl, which is what makes Studio usable from `ccp` and from dispatched workers. Gmail is deliberately left out of agent sessions; add `mcp__plugin_hm_gmail__*` to a role if you want it there.
@@ -871,7 +873,7 @@ vault=/Volumes/ssd/vaults/<project>
 ### The loop
 
 1. `prodev issue new --type feature --title "…"` — every plan, feature, bug fix and chore gets a detailed issue (context, plan, files, acceptance, verification) before code
-2. `prodev task new --title "…" --tier work|lite --files a.ts,b.ts` — the `files:` list is what keeps two workers apart; `tier lite` routes GitHub chores and trivial fixes to Haiku / flash-low. Add `--push` when the task is allowed to push its branch; without it a worker only commits
+2. `prodev task new --title "…" --tier work|lite --files a.ts,b.ts` — the `files:` list is what keeps two workers apart; `tier lite` routes GitHub chores and trivial fixes to Haiku / flash-low. Sonnet starts at medium effort; add `--effort high` only for work that needs the deep tier. Add `--push` when the task is allowed to push its branch; without it a worker only commits
 3. `prodev dispatch [--tool opencode|claude] [--slots 2]` — refuses tasks without an issue, refuses overlapping file sets, gives each worker a worktree and branch `prodev/<id>`, tees logs to `50-log/workers/`, releases the lease
 4. `prodev merge <id>` merges the branch only when the worker left a report and the tree is clean (aborts on conflict), then the orchestrator closes the issue with what changed and how it was verified, and marks the task done. `--push` is only for an explicit user request
 

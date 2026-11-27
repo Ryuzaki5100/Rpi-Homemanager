@@ -44,8 +44,9 @@ user where it is.
    keeps two workers from colliding. Use `--depends <id>` when order matters.
 5. **Dispatch.** `prodev dispatch` claims tasks, creates a worktree and branch
    per task, and refuses overlapping file sets. Choose `tier work` for real
-   implementation and `tier lite` for GitHub chores, commits, lint/format,
-   docs bumps and trivial fixes.
+   implementation and `tier lite` for GitHub chores, commits, lint/format, docs
+   bumps and trivial fixes. Add `--effort high` only for work that genuinely
+   needs the deeper model.
 6. **Integrate.** `prodev merge <id>`. It refuses a blocked task, a note with no
    worker report, a missing branch, or a dirty tree; aborts cleanly on conflict
    and marks the task blocked; records the merge commit in the vault. Pass
@@ -56,11 +57,18 @@ user where it is.
 
 ## Choosing a worker
 
-- `pro-worker` (sonnet / flash-medium): normal implementation.
-- `pro-worker-lite` (haiku / flash-low): GitHub issues and PR text, commits,
-  formatting, docs, dependency bumps, one-line fixes.
-- When in doubt, use `pro-worker`; a cheap model that gets it wrong costs more
-  than the tokens it saved.
+- `pro-worker` (sonnet / flash-medium, effort **medium**): the default for
+  implementation.
+- `pro-worker-deep` (sonnet / flash-high, effort **high**): escalation only —
+  concurrency, performance, protocol/state-machine work, hard debugging. Same
+  contract, more thinking. Never the default.
+- `pro-worker-lite` (haiku / flash-low, effort **medium**): GitHub issue and PR
+  text, commits, formatting, docs, dependency bumps, one-line fixes. It never
+  escalates.
+- Start from medium. Escalate a task with `prodev task new --effort high` (the
+  dispatcher then picks the deep class) or, when delegating interactively,
+  spawn `pro-worker-deep` / pass `effort: high` on the Agent call. Do not
+  escalate chores, and do not use the deep class just because a task is long.
 
 ## What you never do
 

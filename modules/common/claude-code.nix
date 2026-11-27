@@ -133,12 +133,13 @@ let
   };
 
   # Headless worker sessions launched by `prodev dispatch`. Edits are
-  # auto-approved; push/reset stay denied. One overlay per instance class so
-  # the lite tier really runs at medium effort.
+  # auto-approved; push/reset stay governed by the hook. One overlay per class
+  # so the effort level is explicit: Sonnet defaults to medium, the deep tier is
+  # the escalation, Haiku never leaves medium.
   workerSettings =
-    tier: effort:
+    role: effort:
     {
-      agent = if tier == "lite" then "pro-worker-lite" else "pro-worker";
+      agent = role;
       effortLevel = effort;
       env = {
         PRODEV_MODE = "1";
@@ -171,9 +172,11 @@ in
     ".claude/prodev/settings.json".source =
       jsonFormat.generate "claude-prodev-settings.json" proSettings;
     ".claude/prodev/worker.settings.json".source =
-      jsonFormat.generate "claude-prodev-worker.settings.json" (workerSettings "work" "high");
+      jsonFormat.generate "claude-prodev-worker.settings.json" (workerSettings "pro-worker" "medium");
+    ".claude/prodev/worker-deep.settings.json".source =
+      jsonFormat.generate "claude-prodev-worker-deep.settings.json" (workerSettings "pro-worker-deep" "high");
     ".claude/prodev/worker-lite.settings.json".source =
-      jsonFormat.generate "claude-prodev-worker-lite.settings.json" (workerSettings "lite" "medium");
+      jsonFormat.generate "claude-prodev-worker-lite.settings.json" (workerSettings "pro-worker-lite" "medium");
   };
 
   # Install settings.json as a real file so `/effort`, `/model` and `/config`
