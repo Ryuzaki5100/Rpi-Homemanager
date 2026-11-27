@@ -4,7 +4,7 @@
 # macOS equivalents: fastfetch (for nitch), native Bluetooth/Wi-Fi, native exFAT.
 {
   home.packages = with pkgs; [
-    code-server
+   #  code-server
     nitch
     bluetuith
     wifitui
