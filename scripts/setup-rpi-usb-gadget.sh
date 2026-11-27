@@ -29,6 +29,29 @@ set -euo pipefail
 #   setup-rpi-usb-gadget.sh --dry-run          # show what would change
 #   setup-rpi-usb-gadget.sh --psu-max-current 3000
 #   setup-rpi-usb-gadget.sh --reboot           # reboot when done
+#   setup-rpi-usb-gadget.sh --usb-route gateway  # Pi is the iPad's router/DNS
+#                                                # (default: local, see below)
+#   setup-rpi-usb-gadget.sh --add-wifi "SSID"  # save a Wi-Fi network (e.g. the
+#                                              # iPhone hotspot) for the Pi itself
+#
+#
+# How the USB link is run (learned the hard way, Nov 2026):
+#   * rpi-usb-gadget-ics (client<->shared auto-switcher) is MASKED. It can flip
+#     usb0 into "client" mode, where neither side has an address and the iPad
+#     falls back to 169.254.x.x. An iPad never serves DHCP, so client mode is
+#     useless here.
+#   * NetworkManager leaves gadget interfaces unmanaged by default, so
+#     usb0-shared.service marks usb0 managed and brings up "USB Gadget (shared)"
+#     (Pi = 10.12.194.1, DHCP server) on every boot, without re-activating it if
+#     NM already did (a re-activation restarts dnsmasq mid-DHCP).
+#   * --usb-route local (default): dnsmasq hands the iPad an address but NO
+#     router and NO DNS, so iPadOS keeps Wi-Fi / the iPhone hotspot for the
+#     internet and uses usb0 only to reach the Pi.
+#   * DHCP exchanges are logged (log-dhcp) and the journal is persistent.
+#
+# If the iPad ever shows 169.254.x.x or still lists the Pi as Router: iPad
+# Settings > Ethernet > (adapter) > Configure IP > Manual, then back to
+# Automatic. Airplane Mode does NOT reset the wired link.
 #
 # Safe to re-run: legacy config is cleaned up, the package path is idempotent,
 # and helper units are rewritten each time.
@@ -72,6 +95,17 @@ SELFHEAL_UNIT=/etc/systemd/system/usb-gadget-selfheal.service
 MAC_CONF=/etc/modprobe.d/99-g_ether-gadget-macs.conf
 DNSMASQ_SNIPPET=/etc/NetworkManager/dnsmasq-shared.d/90-rpi-usb-gadget-lease.conf
 MOTD_FILE=/etc/update-motd.d/99-rpi-usb-gadget
+DNSMASQ_DIR=/etc/NetworkManager/dnsmasq-shared.d
+DNSMASQ_NOGW=$DNSMASQ_DIR/80-no-gateway.conf
+DNSMASQ_LOGDHCP=$DNSMASQ_DIR/70-log-dhcp.conf
+SHARED_PROFILE="USB Gadget (shared)"
+CLIENT_PROFILE="USB Gadget (client)"
+ICS_UNIT=rpi-usb-gadget-ics.service
+BRINGUP_SCRIPT=/usr/local/sbin/usb0-shared.sh
+BRINGUP_UNIT=/etc/systemd/system/usb0-shared.service
+MONITOR_SCRIPT=/usr/local/sbin/usb0-monitor.sh
+MONITOR_UNIT=/etc/systemd/system/usb0-monitor.service
+WIFI_PRIORITY=-10
 UDC_ROOT=/sys/class/udc
 
 ACTION=setup
@@ -81,6 +115,8 @@ PIN_MACS=false
 FORCE=false
 PSU_MAX_CURRENT=""
 NEED_REBOOT=false
+USB_ROUTE=local
+ADD_WIFI=""
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -99,8 +135,20 @@ while [ $# -gt 0 ]; do
             [ -n "$PSU_MAX_CURRENT" ] || { echo "--psu-max-current needs a value" >&2; exit 1; }
             shift
             ;;
+        --usb-route=*) USB_ROUTE="${1#*=}" ;;
+        --usb-route)
+            USB_ROUTE="${2:-}"
+            shift
+            ;;
+        --add-wifi=*) ADD_WIFI="${1#*=}"; ACTION=wifi ;;
+        --add-wifi)
+            ADD_WIFI="${2:-}"
+            [ -n "$ADD_WIFI" ] || { echo "--add-wifi needs an SSID" >&2; exit 1; }
+            ACTION=wifi
+            shift
+            ;;
         -h|--help)
-            sed -n '2,40p' "$0" | sed 's/^# \{0,1\}//'
+            sed -n '3,57p' "$0" | sed 's/^# \{0,1\}//'
             exit 0
             ;;
         *)
@@ -110,6 +158,11 @@ while [ $# -gt 0 ]; do
     esac
     shift
 done
+
+case "$USB_ROUTE" in
+    local|gateway) ;;
+    *) echo "--usb-route must be 'local' or 'gateway'" >&2; exit 1 ;;
+esac
 
 # --- helpers ---------------------------------------------------------------
 x() {
@@ -148,6 +201,18 @@ udc_state() {
         return 0
     done
     return 1
+}
+
+unit_state() {
+    # enabled / disabled / masked / not-found, plus active state
+    local e a
+    e=$(systemctl is-enabled "$1" 2>/dev/null || true)
+    a=$(systemctl is-active "$1" 2>/dev/null || true)
+    printf '%s/%s' "${e:-not-found}" "${a:-inactive}"
+}
+
+profile_exists() {
+    nmcli -t -f NAME connection show 2>/dev/null | grep -Fxq "$1"
 }
 
 psu_applied() {
@@ -208,12 +273,22 @@ status() {
 
     echo
     echo ":: Services"
-    printf '  ics watcher:  enabled=%s active=%s\n' \
-        "$(systemctl is-enabled --quiet rpi-usb-gadget-ics.service 2>/dev/null && echo yes || echo no)" \
-        "$(systemctl is-active --quiet rpi-usb-gadget-ics.service 2>/dev/null && echo yes || echo no)"
-    printf '  self-heal:    enabled=%s active=%s\n' \
-        "$(systemctl is-enabled --quiet usb-gadget-selfheal.service 2>/dev/null && echo yes || echo no)" \
-        "$(systemctl is-active --quiet usb-gadget-selfheal.service 2>/dev/null && echo yes || echo no)"
+    printf '  ics watcher:  %s (want masked)\n' "$(unit_state "$ICS_UNIT")"
+    printf '  usb0-shared:  %s (want enabled)\n' "$(unit_state usb0-shared.service)"
+    printf '  self-heal:    %s (legacy g_ether path only)\n' "$(unit_state usb-gadget-selfheal.service)"
+    printf '  monitor:      %s (debug only)\n' "$(unit_state usb0-monitor.service)"
+
+    echo
+    echo ":: Routing"
+    if [ -f "$DNSMASQ_NOGW" ]; then
+        echo "  usb route:    local (iPad gets no router/DNS; keeps its own Wi-Fi/hotspot)"
+    else
+        echo "  usb route:    gateway (Pi is the iPad's router; needs a Pi upstream)"
+    fi
+    printf '  Pi upstream:  %s\n' "$(ip -4 route show default 2>/dev/null | awk 'NR==1 {print $5" via "$3}' | grep . || echo none)"
+    if command -v nmcli >/dev/null 2>&1; then
+        printf '  Wi-Fi:        %s\n' "$(nmcli -t -f NAME,TYPE,AUTOCONNECT-PRIORITY connection show 2>/dev/null | awk -F: '$2=="802-11-wireless" {printf "%s(prio %s) ", $1, $3}' | grep . || echo none)"
+    fi
 
     echo
     echo ":: Host on usb0"
@@ -298,6 +373,22 @@ verify() {
         echo "    SKIP usb0 down (no host attached yet: plug in the iPad)"
     else
         echo "    FAIL host attached but usb0 is down"; rc=1
+    fi
+
+    if [ "$(systemctl is-enabled "$ICS_UNIT" 2>/dev/null || true)" = masked ]; then
+        echo "    OK   $ICS_UNIT masked"
+    elif systemctl list-unit-files "$ICS_UNIT" >/dev/null 2>&1; then
+        echo "    FAIL $ICS_UNIT is not masked (can flip usb0 into client mode)"; rc=1
+    fi
+    if systemctl is-enabled --quiet usb0-shared.service 2>/dev/null; then
+        echo "    OK   usb0-shared.service enabled"
+    elif [ "$(systemctl is-enabled "$ICS_UNIT" 2>/dev/null || true)" = masked ]; then
+        echo "    FAIL usb0-shared.service not enabled (nothing will bring usb0 up)"; rc=1
+    fi
+    if [ -f "$DNSMASQ_NOGW" ]; then
+        echo "    OK   usb route: local (no router/DNS sent to the iPad)"
+    else
+        echo "    INFO usb route: gateway (iPad internet goes through the Pi)"
     fi
 
     local th
@@ -699,6 +790,168 @@ silence_motd() {
     fi
 }
 
+# --- deterministic usb0 bring-up (replaces the ICS auto-switcher) -----------
+install_usb0_shared() {
+    echo "==> Pinning usb0 to shared mode (Pi = DHCP server on 10.12.194.1)"
+
+    if systemctl list-unit-files "$ICS_UNIT" >/dev/null 2>&1; then
+        x $SUDO systemctl disable --now "$ICS_UNIT" >/dev/null 2>&1 || true
+        x $SUDO systemctl mask "$ICS_UNIT" >/dev/null 2>&1 || true
+        echo "    masked $ICS_UNIT"
+    fi
+
+    if command -v nmcli >/dev/null 2>&1; then
+        if profile_exists "$CLIENT_PROFILE"; then
+            x $SUDO nmcli connection modify "$CLIENT_PROFILE" connection.autoconnect no
+        fi
+        if profile_exists "$SHARED_PROFILE"; then
+            # ipv6 disabled is the package default; enforce it so an update
+            # can't start sending RAs that give the iPad a v6 route via the Pi.
+            x $SUDO nmcli connection modify "$SHARED_PROFILE" \
+                connection.autoconnect yes connection.autoconnect-priority 100 \
+                ipv6.method disabled
+        else
+            echo "    WARN profile '$SHARED_PROFILE' not found (run 'rpi-usb-gadget on' first?)" >&2
+        fi
+    fi
+
+    put 0755 "$BRINGUP_SCRIPT" <<'EOF'
+#!/bin/sh
+# Autogenerated by setup-rpi-usb-gadget.sh.
+# NetworkManager leaves USB gadget interfaces unmanaged, so mark usb0 managed
+# and make sure the shared profile is up. Do NOT re-activate it if NM already
+# did: that restarts dnsmasq while the iPad is mid-DHCP -> 169.254.x.x.
+nm-online -s -q -t 60 || true
+i=0
+while [ ! -e /sys/class/net/usb0 ] && [ "$i" -lt 60 ]; do sleep 1; i=$((i + 1)); done
+nmcli device set usb0 managed yes
+sleep 5
+if ! nmcli -t -f NAME connection show --active | grep -Fxq 'USB Gadget (shared)'; then
+  nmcli connection up 'USB Gadget (shared)' ifname usb0
+fi
+EOF
+
+    put 0644 "$BRINGUP_UNIT" <<'EOF'
+[Unit]
+Description=Bring up USB gadget shared network on usb0
+After=NetworkManager.service
+Wants=NetworkManager.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/usb0-shared.sh
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    x $SUDO systemctl daemon-reload
+    x $SUDO systemctl enable usb0-shared.service >/dev/null 2>&1 || true
+    # Start only if usb0 has no address yet, so an SSH session over usb0
+    # is never bounced by re-running this script.
+    if ! ip -4 -o addr show dev usb0 2>/dev/null | grep -q inet; then
+        x $SUDO systemctl start usb0-shared.service || true
+    fi
+}
+
+# --- who owns the iPad's internet path --------------------------------------
+configure_usb_route() {
+    x $SUDO mkdir -p "$DNSMASQ_DIR"
+
+    # Always log DHCP exchanges; they are the only way to see what the iPad did.
+    put 0644 "$DNSMASQ_LOGDHCP" <<'EOF'
+# Autogenerated by setup-rpi-usb-gadget.sh
+log-dhcp
+EOF
+
+    if [ "$USB_ROUTE" = local ]; then
+        echo "==> usb0 route: local (iPad keeps Wi-Fi/hotspot for internet)"
+        # An option with no value tells dnsmasq not to send it.
+        # 3 = router, 6 = DNS. usb0 is the only NM shared connection.
+        put 0644 "$DNSMASQ_NOGW" <<'EOF'
+# Autogenerated by setup-rpi-usb-gadget.sh (--usb-route local)
+# usb0 clients get an address but no default route or DNS.
+dhcp-option=3
+dhcp-option=6
+EOF
+    else
+        echo "==> usb0 route: gateway (Pi NATs the iPad; Pi needs an upstream)"
+        if [ -f "$DNSMASQ_NOGW" ]; then
+            x $SUDO rm -f "$DNSMASQ_NOGW"
+        fi
+    fi
+
+    if [ ! -x /usr/sbin/dnsmasq ]; then
+        echo "    WARN /usr/sbin/dnsmasq missing (install dnsmasq-base): shared mode cannot hand out DHCP" >&2
+    elif [ "$DRY_RUN" = false ]; then
+        local f
+        for f in "$DNSMASQ_LOGDHCP" "$DNSMASQ_NOGW"; do
+            [ -f "$f" ] || continue
+            $SUDO /usr/sbin/dnsmasq --test --conf-file="$f" >/dev/null 2>&1 || {
+                echo "ERROR: dnsmasq rejected $f; removing it" >&2
+                $SUDO rm -f "$f"
+            }
+        done
+    fi
+    # Not applied live: restarting the shared connection would drop an SSH
+    # session over usb0. It takes effect on the next boot, or now with:
+    #   sudo nmcli connection up 'USB Gadget (shared)'
+}
+
+# --- persistent journal ------------------------------------------------------
+enable_persistent_journal() {
+    if [ ! -d /var/log/journal ]; then
+        echo "==> Enabling persistent journal (logs survive reboots)"
+        x $SUDO mkdir -p /var/log/journal
+        x $SUDO systemd-tmpfiles --create --prefix /var/log/journal || true
+        x $SUDO journalctl --flush || true
+    fi
+}
+
+# --- the self-heal only makes sense for the legacy g_ether stack ----------
+remove_selfheal() {
+    if [ -f "$SELFHEAL_UNIT" ] || [ -f "$SELFHEAL_SCRIPT" ]; then
+        echo "==> Removing g_ether self-heal (not used by the rpi-usb-gadget path)"
+        x $SUDO systemctl disable --now usb-gadget-selfheal.service >/dev/null 2>&1 || true
+        x $SUDO rm -f "$SELFHEAL_UNIT" "$SELFHEAL_SCRIPT"
+        x $SUDO systemctl daemon-reload || true
+    fi
+}
+
+# --- Wi-Fi for the Pi itself (e.g. the iPhone hotspot) ---------------------
+add_wifi() {
+    command -v nmcli >/dev/null 2>&1 || { echo "ERROR: nmcli not found" >&2; exit 1; }
+    local ssid=$ADD_WIFI name psk
+    name="wifi-$(printf '%s' "$ssid" | tr -c 'A-Za-z0-9' '-' | tr -s '-' | sed 's/-$//')"
+
+    # iPhone hotspot names often use a curly apostrophe; prefer the exact
+    # broadcast name if a scan finds a case-insensitive match.
+    $SUDO nmcli device wifi rescan >/dev/null 2>&1 || true
+    sleep 4
+    local seen
+    seen=$(nmcli -t -f SSID device wifi list 2>/dev/null | grep -iF -- "$ssid" | head -n1 || true)
+    if [ -n "$seen" ] && [ "$seen" != "$ssid" ]; then
+        echo "==> Using broadcast name [$seen] (closest match for [$ssid])"
+        ssid=$seen
+    elif [ -z "$seen" ]; then
+        echo "    WARN [$ssid] not visible right now (iPhone: keep the Personal Hotspot"
+        echo "         screen open, Maximize Compatibility on). Saving it anyway."
+    fi
+
+    read -rsp "Password for [$ssid]: " psk; echo
+    if profile_exists "$name"; then
+        x $SUDO nmcli connection delete "$name" >/dev/null 2>&1 || true
+    fi
+    x $SUDO nmcli connection add type wifi ifname wlan0 con-name "$name" ssid "$ssid" \
+        wifi-sec.key-mgmt wpa-psk wifi-sec.psk "$psk" \
+        connection.autoconnect yes connection.autoconnect-priority "$WIFI_PRIORITY" >/dev/null
+    psk=""
+    echo "==> Saved $name (priority $WIFI_PRIORITY: home Wi-Fi wins when both are in range)"
+    x $SUDO nmcli connection up "$name" || echo "    not connected yet; it will join when the network is in range"
+    ip -4 route show default 2>/dev/null | sed 's/^/    /'
+}
+
 # --- restore ---------------------------------------------------------------
 restore() {
     echo "==> Restoring pre-gadget configuration"
@@ -708,7 +961,10 @@ restore() {
     fi
 
     x $SUDO systemctl disable --now usb-gadget-selfheal.service >/dev/null 2>&1 || true
-    for f in "$SELFHEAL_UNIT" "$SELFHEAL_SCRIPT" "$MAC_CONF" "$DNSMASQ_SNIPPET" "$OLD_RENOTIFY_UNIT" "$OLD_RENOTIFY_SCRIPT"; do
+    x $SUDO systemctl disable --now usb0-shared.service usb0-monitor.service >/dev/null 2>&1 || true
+    x $SUDO systemctl unmask "$ICS_UNIT" >/dev/null 2>&1 || true
+    for f in "$SELFHEAL_UNIT" "$SELFHEAL_SCRIPT" "$MAC_CONF" "$DNSMASQ_SNIPPET" "$OLD_RENOTIFY_UNIT" "$OLD_RENOTIFY_SCRIPT" \
+             "$BRINGUP_UNIT" "$BRINGUP_SCRIPT" "$MONITOR_UNIT" "$MONITOR_SCRIPT" "$DNSMASQ_NOGW" "$DNSMASQ_LOGDHCP"; do
         if [ -f "$f" ]; then
             x $SUDO rm -f "$f"
             echo "    removed $f"
@@ -767,6 +1023,10 @@ case "$ACTION" in
         diagnose
         exit 0
         ;;
+    wifi)
+        add_wifi
+        exit 0
+        ;;
 esac
 
 if [ "$ACTION" = "restore" ]; then
@@ -778,14 +1038,18 @@ else
 
     if [ "$ACTION" = "legacy" ]; then
         legacy_setup
+        pin_macs
+        install_selfheal
     else
         ensure_package
         cleanup_legacy
         enable_supported
+        install_usb0_shared
+        remove_selfheal
     fi
 
-    pin_macs
-    install_selfheal
+    configure_usb_route
+    enable_persistent_journal
     silence_motd
 fi
 
@@ -809,11 +1073,18 @@ if [ "$NEED_REBOOT" = true ]; then
     echo "and $(basename "$CMDLINE")$BACKUP_SUFFIX."
 fi
 echo
+if [ "$ACTION" != "restore" ]; then
+    echo "Routing/DHCP changes apply on the next boot (or now, if you are NOT"
+    echo "connected over usb0: sudo nmcli connection up '$SHARED_PROFILE')."
+    echo "Then on the iPad: Settings > Ethernet > adapter > Configure IP >"
+    echo "Manual, then Automatic, to pick up the new lease."
+    echo
+fi
 echo "After reconnecting the iPad:"
 echo "    make rpi-usb-gadget-verify        # or: $0 --verify"
 echo "    make rpi-usb-gadget-diagnose      # full dump to paste when it misbehaves"
-echo "    journalctl -u usb-gadget-selfheal.service -f"
-echo "    sudo tcpdump -i usb0 -n -e port 67 or port 68"
+echo "    journalctl -b | grep -E 'DHCP|usb0'   # what the iPad asked for"
+echo "    $0 --add-wifi \"<hotspot name>\"   # give the Pi its own internet"
 
 if [ "$DO_REBOOT" = true ] && [ "$DRY_RUN" = false ]; then
     echo
