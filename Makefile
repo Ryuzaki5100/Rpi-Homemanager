@@ -19,11 +19,21 @@ DAEMON_STOP := sudo systemctl stop docker
 IP_CMD := hostname -I | awk '{print $$1}'
 endif
 
-.PHONY: help require-linux immich-setup immich-teardown immich-start immich-stop immich-shutdown immich-restart immich-pull immich-update immich-logs immich-logs-server immich-logs-ml immich-logs-postgres immich-logs-redis immich-status immich-exec immich-db-shell immich-sync immich-backup immich-restore immich-clean immich-prune immich-ip immich-check-hdd immich-hdd-mount immich-hdd-unmount immich-hdd-status immich-link-library immich-hdd-undo immich-ssd-undo immich-hdd-backup immich-ssd-backup
+.PHONY: help require-linux rpi-usb-gadget rpi-usb-gadget-status rpi-usb-gadget-legacy immich-setup immich-teardown immich-start immich-stop immich-shutdown immich-restart immich-pull immich-update immich-logs immich-logs-server immich-logs-ml immich-logs-postgres immich-logs-redis immich-status immich-exec immich-db-shell immich-sync immich-backup immich-restore immich-clean immich-prune immich-ip immich-check-hdd immich-hdd-mount immich-hdd-unmount immich-hdd-status immich-link-library immich-hdd-undo immich-ssd-undo immich-hdd-backup immich-ssd-backup
 
 # Fail fast on targets that only make sense on Linux (HDD/Samba/backups).
 require-linux:
 	@[ "$(UNAME)" = "Linux" ] || { echo "This target is Linux-only (no macOS equivalent: no /mnt/hdd, no Samba server)."; exit 1; }
+
+# --- Raspberry Pi USB gadget (one command on a fresh install) ---
+rpi-usb-gadget: require-linux
+	sudo bash $(HOME)/dotfiles/scripts/setup-rpi-usb-gadget.sh
+
+rpi-usb-gadget-legacy: require-linux
+	sudo bash $(HOME)/dotfiles/scripts/setup-rpi-usb-gadget.sh --legacy
+
+rpi-usb-gadget-status: require-linux
+	bash $(HOME)/dotfiles/scripts/setup-rpi-usb-gadget.sh --status
 
 help:
 	@echo "Usage: make immich-<target>"
@@ -66,6 +76,11 @@ help:
 	@echo "  immich-ssd-undo         - Restore all files deleted from the SSD Samba share recycle bin"
 	@echo "  immich-hdd-backup       - Rotating snapshot backup of /mnt/hdd -> /mnt/ssd/backups/hdd"
 	@echo "  immich-ssd-backup       - Rotating snapshot backup of /mnt/ssd -> /mnt/hdd/backups/ssd"
+	@echo ""
+	@echo "Raspberry Pi USB gadget:"
+	@echo "  rpi-usb-gadget          - One-command USB-C ethernet gadget (iPad/laptop; rpi-usb-gadget package)"
+	@echo "  rpi-usb-gadget-legacy   - Force the old manual g_ether setup"
+	@echo "  rpi-usb-gadget-status   - Show gadget interface, profile and UDC state"
 	@echo ""
 	@echo "Maintenance:"
 	@echo "  immich-clean            - Remove stopped containers and dangling images"

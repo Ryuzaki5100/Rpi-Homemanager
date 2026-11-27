@@ -216,7 +216,7 @@ dotfiles/
 │   ├── setup-gmail-mcp.sh     # Interactive Gmail MCP setup wizard
 │   ├── setup-firecrawl.sh     # Save a Firecrawl API key for the MCP server
 │   ├── setup-immich.sh        # Bootstrap Docker daemon and start Immich
-│   ├── setup-rpi-usb-gadget.sh # Configure RPi as USB ethernet gadget
+│   ├── setup-rpi-usb-gadget.sh # One-command USB-C ethernet gadget (iPad/laptop)
 │   ├── setup-tailscale.sh     # Tailscale auth, status check, and systemd enable
 │   ├── setup-wayvnc.sh        # Set up WayVNC VNC server for iPad access
 │   ├── sync-learnharness-skill.sh # Re-vendor both LearnHarness skills from the built derivation
@@ -1187,7 +1187,21 @@ The configuration is layered so Home Manager builds only the modules the host ca
 | Immich | Docker + `/etc/localtime`; Pi 5 gets `/dev/video19` + HW transcode | Docker Desktop; no device passthrough/HW accel |
 | Tailscale | `tailscaled` + systemd unit (via `scripts/setup-tailscale.sh`) | Tailscale app (`brew install --cask tailscale`) |
 | `nitch`, `code-server`, `foliate`, `bluetuith`, `wifitui`, `exfatprogs` | installed | not built (use `fastfetch`, native Bluetooth/Wi-Fi/exFAT) |
-| HDD `/mnt/hdd`, Samba shares, drive backups, RPi USB-gadget, WayVNC | available (`make immich-*`, scripts) | **Linux-only** — scripts/targets exit with a clear message |
+| HDD `/mnt/hdd`, Samba shares, drive backups, RPi USB-gadget, WayVNC | available (`make rpi-usb-gadget`, `make immich-*`, scripts) | **Linux-only** — scripts/targets exit with a clear message |
+
+### Raspberry Pi USB-C ethernet gadget
+
+`scripts/setup-rpi-usb-gadget.sh` turns the Pi into a CDC-ECM USB ethernet adapter so an iPad or laptop can be tethered over the USB-C port. On a fresh Raspberry Pi OS Trixie image it is a single command:
+
+```bash
+make rpi-usb-gadget        # or: sudo bash ~/dotfiles/scripts/setup-rpi-usb-gadget.sh
+```
+
+It uses Trixie's built-in [`rpi-usb-gadget`](https://github.com/raspberrypi/rpi-usb-gadget) package (installing it if absent) and removes any leftover manual `g_ether`/`modules-load=dwc2,g_ether`/`ethernet-usb0` configuration so only one stack owns `usb0`.
+
+It also works around a known dwc2/iPadOS failure ([`rpi-usb-gadget#27`](https://github.com/raspberrypi/rpi-usb-gadget/issues/27)) where host→device packets stop arriving after a burst: device→host keeps working, but the host falls back to a self-assigned `169.254.x.x` and DHCP never completes. The script installs `usb-gadget-selfheal.service`, which watches for the kernel's `dwc2_hsotg_ep_stop_xfr`/`txfifo_flush` timeout signature and, for wedges that log nothing, uses a DHCP-lease / rx-packet fallback, then recovers with `rmmod g_ether && modprobe g_ether` (rate-limited). It also pins stable per-board gadget MACs in `/etc/modprobe.d/99-g_ether-gadget-macs.conf` so each reload looks like the same adapter to iPadOS, and silences the Windows-only RNDIS login hint.
+
+The iPad then receives an address in `10.12.194.0/28` with the Pi at `10.12.194.1`. A reboot is recommended after running (the self-heal applies immediately, so the link usually works before then). `make rpi-usb-gadget-status` shows the interface/profile/UDC/lease state, `make rpi-usb-gadget-legacy` forces the old manual setup on non-Trixie images, `journalctl -u usb-gadget-selfheal -f` shows recovery decisions, and `sudo tcpdump -i usb0 -n -e port 67 or port 68` verifies the DHCP exchange.
 
 ### Roblox Studio Setup
 
