@@ -1197,11 +1197,78 @@ The configuration is layered so Home Manager builds only the modules the host ca
 make rpi-usb-gadget        # or: sudo bash ~/dotfiles/scripts/setup-rpi-usb-gadget.sh
 ```
 
-It uses Trixie's built-in [`rpi-usb-gadget`](https://github.com/raspberrypi/rpi-usb-gadget) package (installing it if absent) and removes any leftover manual `g_ether`/`modules-load=dwc2,g_ether`/`ethernet-usb0` configuration so only one stack owns `usb0`.
+It uses Trixie's built-in [`rpi-usb-gadget`](https://github.com/raspberrypi/rpi-usb-gadget) package (installing it if absent) and removes any leftover manual `g_ether`/`modules-load=dwc2,g_ether`/`ethernet-usb0` configuration so only one stack owns `usb0`. The package is verified **before** any existing config is deleted, and a failed `apt` aborts instead of silently falling back to the legacy stack.
 
-It also works around a known dwc2/iPadOS failure ([`rpi-usb-gadget#27`](https://github.com/raspberrypi/rpi-usb-gadget/issues/27)) where host→device packets stop arriving after a burst: device→host keeps working, but the host falls back to a self-assigned `169.254.x.x` and DHCP never completes. The script installs `usb-gadget-selfheal.service`, which watches for the kernel's `dwc2_hsotg_ep_stop_xfr`/`txfifo_flush` timeout signature and, for wedges that log nothing, uses a DHCP-lease / rx-packet fallback, then recovers with `rmmod g_ether && modprobe g_ether` (rate-limited). It also pins stable per-board gadget MACs in `/etc/modprobe.d/99-g_ether-gadget-macs.conf` so each reload looks like the same adapter to iPadOS, and silences the Windows-only RNDIS login hint.
+#### Pi 5 + iPad: the power-delivery requirement
 
-The iPad then receives an address in `10.12.194.0/28` with the Pi at `10.12.194.1`. A reboot is recommended after running (the self-heal applies immediately, so the link usually works before then). `make rpi-usb-gadget-status` shows the interface/profile/UDC/lease state, `make rpi-usb-gadget-legacy` forces the old manual setup on non-Trixie images, `journalctl -u usb-gadget-selfheal -f` shows recovery decisions, and `sudo tcpdump -i usb0 -n -e port 67 or port 68` verifies the DHCP exchange.
+On a Pi 5 the USB-C port is the only device-capable port **and** the only power input. When an iPad powers the board, the bootloader's USB-PD request makes iPadOS shut down the USB 2.0 data lines — `usb0` stays `NO-CARRIER`, the iPad shows no Ethernet adapter, and VBUS can drop mid-write and corrupt the SD card. The fix is to skip PD negotiation entirely:
+
+```bash
+sudo rpi-eeprom-config > /tmp/bootconf.txt
+grep -q '^PSU_MAX_CURRENT=' /tmp/bootconf.txt \
+  && sudo sed -i 's/^PSU_MAX_CURRENT=.*/PSU_MAX_CURRENT=3000/' /tmp/bootconf.txt \
+  || echo 'PSU_MAX_CURRENT=3000' | sudo tee -a /tmp/bootconf.txt
+sudo rpi-eeprom-config --apply /tmp/bootconf.txt && sudo reboot
+```
+
+The script refuses to enable gadget mode on a Pi 5 without it; pass `--psu-max-current 3000` to have it written for you (a reboot is still required). See Raspberry Pi's [USB PD on Pi 5](https://pip-assets.raspberrypi.com/categories/685-app-notes-guides-whitepapers/documents/RP-009856-WP-1-USB%20Power%20delivery%20on%20Raspberry%20Pi%205.pdf) app note and [raspberrypi/linux#6569](https://github.com/raspberrypi/linux/issues/6569). Still expect the iPad to cap the Pi at 5 V/~1.5 A: keep it headless, and note that recent M-series iPads/Macs can refuse to enumerate the gadget even with the EEPROM fix (a PD-powered hub in between is the documented workaround).
+
+#### Self-heal, and why it is conservative
+
+A dwc2 peripheral OUT endpoint can wedge ([`rpi-usb-gadget#27`](https://github.com/raspberrypi/rpi-usb-gadget/issues/27)): host→device packets stop arriving while device→host keeps working, and the host falls back to `169.254.x.x`. `usb-gadget-selfheal.service` only reloads `g_ether` when the link is unhealthy on **every** axis — no IPv4 address on `usb0`, no neighbour entry, no `rx_packets` movement for 6 consecutive polls — and never while an SSH session is riding on `usb0`. It reloads at most once per host attach. (The previous version keyed off the DHCP lease file, which only exists in shared mode, so it `rmmod`'d the gadget every 45 s in client/ICS mode.) Stable MAC pinning is opt-in via `--pin-macs`.
+
+#### Lifecycle
+
+The iPad receives an address in `10.12.194.0/28` with the Pi at `10.12.194.1`. `config.txt`/`cmdline.txt` are backed up to `*.rpi-usb-gadget.bak` before anything is changed — if the board does not come back, mount the boot partition elsewhere and copy them back.
+
+| Target | What it does |
+|---|---|
+| `make rpi-usb-gadget` | Configure the package-based stack (installs it if needed) |
+| `make rpi-usb-gadget-dry-run` | Print every file/profile/unit that would change |
+| `make rpi-usb-gadget-status` | Board, EEPROM, UDC, `usb0`, neighbour, services |
+| `make rpi-usb-gadget-verify` | Post-reboot health check with pass/fail/skip lines |
+| `make rpi-usb-gadget-diagnose` | Full dump: boot config, modules, `usb0`, dmesg, failed units |
+| `make rpi-usb-gadget-legacy` | Old known-good stack: bare `dtoverlay=dwc2`, `ethernet-usb0` at `10.42.0.1/24` |
+| `make rpi-usb-gadget-restore` | Undo everything and restore the boot files from backup |
+
+`journalctl -u usb-gadget-selfheal -f` shows watchdog decisions and `sudo tcpdump -i usb0 -n -e port 67 or port 68` verifies the DHCP exchange.
+
+#### Working state (reference)
+
+A healthy Pi 5 + iPad link looks like this — if a future run does not, start at the table below:
+
+```
+$ make rpi-usb-gadget-status
+  bootloader:   2026/09/25 15:59:09
+  PSU_MAX_CURRENT: applied=3000 pending=
+  max_current:  3000 (mA reported by firmware)
+  throttled:    throttled=0x0 -> none
+  UDC:          configured
+usb0             UP             10.12.194.1/28
+  NM profile:   USB Gadget (shared)
+  ics watcher:  enabled=yes active=yes
+  self-heal:    enabled=yes active=yes
+
+$ ip neigh show dev usb0
+10.12.194.14 lladdr ... REACHABLE
+```
+
+There is **no DHCP lease file** in this setup even though DHCP works (this NetworkManager version keeps leases elsewhere). Do not chase the missing file — `ip neigh` and the `usb0` IPv4 address are the real health signals, and `usb-gadget-selfheal` uses those, not the lease file.
+
+#### Troubleshooting
+
+| Symptom | Check | Cause / fix |
+|---|---|---|
+| Whole Pi gone after plugging the iPad (no Wi-Fi, no SSH) | `vcgencmd bootloader_config \| grep PSU_MAX_CURRENT` after recovery | Missing EEPROM PD fix — the bootloader requested PD, iPadOS cut the data lines/VBUS. Set `PSU_MAX_CURRENT=3000` (`--psu-max-current 3000`). Recover boot files from `*.rpi-usb-gadget.bak` |
+| `/sys/class/udc` empty | `ls /sys/class/udc` | Overlay not active — reboot; check `dtoverlay=dwc2,dr_mode=peripheral` is under an `[all]` section |
+| `UDC: not attached`, iPad shows no Ethernet | `cat /sys/class/udc/*/state`, try another cable | No host on the port: charging-only cable, or the host port is not a USB data port |
+| `UDC: configured` but `usb0` stays down | `nmcli device show usb0`, `usb-gadget-status` | NetworkManager profile/driver issue — `rpi-usb-gadget on -f`, or `--restore` then re-run |
+| `usb0` up, iPad has no Ethernet adapter | `vcgencmd get_throttled`, `dmesg \| grep dwc2` | Apple host refused enumeration (M-series PD quirk) or under-voltage — insert a PD-powered hub |
+| `throttled` shows `0x10000`/`0x1` | `vcgencmd get_throttled` | iPad cannot supply enough current — power via PoE+/GPIO and keep USB-C for data (data-only cable), or use a powered hub |
+| Gadget re-enumerates on every boot | compare `ip link show usb0` MAC each boot | Random gadget MACs; run setup with `--pin-macs` |
+| iPad link dies under load | `journalctl -u usb-gadget-selfheal -f` | Watchdog reloads `g_ether` at most once per attach; repeat wedges point at power first |
+
+`make rpi-usb-gadget-diagnose` prints everything above in one block — paste that when asking for help.
 
 ### Roblox Studio Setup
 
