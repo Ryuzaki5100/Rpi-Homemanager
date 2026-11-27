@@ -1199,6 +1199,17 @@ make rpi-usb-gadget        # or: sudo bash ~/dotfiles/scripts/setup-rpi-usb-gadg
 
 It uses Trixie's built-in [`rpi-usb-gadget`](https://github.com/raspberrypi/rpi-usb-gadget) package (installing it if absent) and removes any leftover manual `g_ether`/`modules-load=dwc2,g_ether`/`ethernet-usb0` configuration so only one stack owns `usb0`. The package is verified **before** any existing config is deleted, and a failed `apt` aborts instead of silently falling back to the legacy stack.
 
+#### For next time
+
+```bash
+make rpi-usb-gadget-dry-run     # see every change first
+make rpi-usb-gadget             # apply (refuses on Pi 5 without PSU_MAX_CURRENT)
+make rpi-usb-gadget-verify      # after reboot; SKIP, not FAIL, when idle
+make rpi-usb-gadget-diagnose    # paste this block if anything misbehaves
+make rpi-usb-gadget-restore     # undo + restore config.txt/cmdline.txt from .bak
+```
+
+
 #### Pi 5 + iPad: the power-delivery requirement
 
 On a Pi 5 the USB-C port is the only device-capable port **and** the only power input. When an iPad powers the board, the bootloader's USB-PD request makes iPadOS shut down the USB 2.0 data lines — `usb0` stays `NO-CARRIER`, the iPad shows no Ethernet adapter, and VBUS can drop mid-write and corrupt the SD card. The fix is to skip PD negotiation entirely:
