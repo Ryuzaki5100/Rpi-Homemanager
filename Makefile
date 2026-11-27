@@ -19,7 +19,7 @@ DAEMON_STOP := sudo systemctl stop docker
 IP_CMD := hostname -I | awk '{print $$1}'
 endif
 
-.PHONY: help require-linux rpi-usb-gadget rpi-usb-gadget-legacy rpi-usb-gadget-status rpi-usb-gadget-verify rpi-usb-gadget-dry-run rpi-usb-gadget-diagnose rpi-usb-gadget-restore immich-setup immich-teardown immich-start immich-stop immich-shutdown immich-restart immich-pull immich-update immich-logs immich-logs-server immich-logs-ml immich-logs-postgres immich-logs-redis immich-status immich-exec immich-db-shell immich-sync immich-backup immich-restore immich-clean immich-prune immich-ip immich-check-hdd immich-hdd-mount immich-hdd-unmount immich-hdd-status immich-link-library immich-hdd-undo immich-ssd-undo immich-hdd-backup immich-ssd-backup
+.PHONY: help require-linux rpi-usb-gadget rpi-usb-gadget-legacy rpi-usb-gadget-status rpi-usb-gadget-verify rpi-usb-gadget-dry-run rpi-usb-gadget-diagnose rpi-usb-gadget-restore wifitui-sudo immich-setup immich-teardown immich-start immich-stop immich-shutdown immich-restart immich-pull immich-update immich-logs immich-logs-server immich-logs-ml immich-logs-postgres immich-logs-redis immich-status immich-exec immich-db-shell immich-sync immich-backup immich-restore immich-clean immich-prune immich-ip immich-check-hdd immich-hdd-mount immich-hdd-unmount immich-hdd-status immich-link-library immich-hdd-undo immich-ssd-undo immich-hdd-backup immich-ssd-backup
 
 # Fail fast on targets that only make sense on Linux (HDD/Samba/backups).
 require-linux:
@@ -46,6 +46,11 @@ rpi-usb-gadget-dry-run: require-linux
 
 rpi-usb-gadget-restore: require-linux
 	sudo bash $(HOME)/dotfiles/scripts/setup-rpi-usb-gadget.sh --restore
+
+# wifitui lives in the Nix profile; install a /usr/local/bin wrapper so both
+# `wifitui` and `sudo wifitui` resolve, plus a netdev polkit rule for SSH use.
+wifitui-sudo: require-linux
+	sudo bash $(HOME)/dotfiles/scripts/setup-wifitui-sudo.sh
 
 help:
 	@echo "Usage: make immich-<target>"
@@ -97,6 +102,7 @@ help:
 	@echo "  rpi-usb-gadget-diagnose - Full debugging dump (config, modules, usb0, dmesg, failed units)"
 	@echo "  rpi-usb-gadget-dry-run  - Show every file/profile/unit the setup would change"
 	@echo "  rpi-usb-gadget-restore  - Undo the gadget setup and restore boot files from backup"
+	@echo "  wifitui-sudo            - wifitui wrapper + netdev polkit rule (works over SSH and with sudo)"
 	@echo ""
 	@echo "Maintenance:"
 	@echo "  immich-clean            - Remove stopped containers and dangling images"

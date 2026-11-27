@@ -440,18 +440,15 @@ Platform-specific packages live in [`modules/linux/packages.nix`](modules/linux/
 
 > **Note:** `pandoc` doubles as the EPUB converter for the [`yt-summarizer`](#yt-summarizer) skill.
 
-> **Note:** `wifitui` requires your user to be in the `netdev` group and a polkit rule allowing NetworkManager actions. On Debian systems, run:
+> **Note:** `wifitui` needs your user in the `netdev` group and a polkit rule allowing NetworkManager actions. On Debian systems one command does both, and also installs a wrapper so `sudo wifitui` resolves (the binary lives in `~/.nix-profile/bin`, which is **not** on sudo's `secure_path`):
 >
 > ```bash
-> sudo usermod -aG netdev $USER
-> echo 'polkit.addRule(function(a, s) {
->   if (a.id.indexOf("org.freedesktop.NetworkManager.") == 0 && s.active && s.isInGroup("netdev"))
->     return polkit.Result.YES;
-> })' | sudo tee /etc/polkit-1/rules.d/10-networkmanager-wifi.rules
-> sudo systemctl restart polkit
+> make wifitui-sudo        # or: sudo bash ~/dotfiles/scripts/setup-wifitui-sudo.sh
 > ```
 >
-> Then log out and back in for the group change to take effect.
+> It writes `/usr/local/bin/wifitui` (execs the Nix profile binary) and `/etc/polkit-1/rules.d/10-networkmanager-wifi.rules`. The polkit rule deliberately does **not** require `subject.active`: the stock implicit rule only matches the active local console session, so over SSH `wifitui connect` would otherwise fall back to `auth_admin` and fail. If you prefer the old stricter variant, keep `s.active` in the rule — but then connecting over SSH needs `sudo wifitui`.
+>
+> Without the wrapper, the manual equivalent is `sudo /home/$USER/.nix-profile/bin/wifitui ...`. The group change needs a log out/in (or reboot).
 
 ### gmail-mcp.nix
 
